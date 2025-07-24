@@ -50,7 +50,7 @@ def main():
                 label = f.split('_')[0]
 
                 new_windows = make_samples()
-                label_array = np.array([label]*len(new_windows)).reshape(-1,1)
+                label_array = np.array([[label]*NUM_WINDWOS]*len(new_windows))#.reshape(-1,NUM_WINDWOS)
 
                 if total_x is None:
                     total_x = new_windows
@@ -60,8 +60,8 @@ def main():
                     total_y = np.vstack([total_y,label_array])
 
 
-    save_array(total_x, 'input.pkl')
-    save_array(total_y, 'output.pkl')
+    save_array(total_x, r'F:\thesis\Articles\2nd\code\Data\input.pkl')
+    save_array(total_y, r'F:\thesis\Articles\2nd\code\Data\output.pkl')
 
 
     print(total_x.shape, total_y.shape)

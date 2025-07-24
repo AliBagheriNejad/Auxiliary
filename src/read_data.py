@@ -46,13 +46,13 @@ def save_csv():
     column_names = ['DE','FE']
     with open(new_path_f, 'w') as f:
         f.write(','.join(column_names) + '\n')
-        np.savetxt(f, data, delimiter=',', fmt='%d')
+        np.savetxt(f, data, delimiter=',',fmt='%.10f')
 
 data_dir = r'D:\Masters\CWRU-dataset\48k_Drive_End_Bearing_Fault_Data'
 
 for root, dirs, files in os.walk(data_dir):
-    if not (len(files) == 0):
-        path_files = [os.path.join(root,f) for f in files]
+    if not (len(files) == 0) :
+        path_files = [os.path.join(root,f) for f in files if f.endswith('.mat')]
         for path_f in path_files:
             data = extract_signals(path_f)
             new_path_f = new_path(path_f)

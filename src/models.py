@@ -77,6 +77,24 @@ class Network(nn.Module):
         self.patience = 10
         self.e_ratio = 100
         self.in_ch = in_channels
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_acc': 0,
+            'val_acc': 0,
+            'val_loss': -np.inf
+        }
 
     def forward(self, x):
         if self.in_ch == 1:
@@ -97,6 +115,7 @@ class Network(nn.Module):
         just use "-loss"
 
         '''
+        self.check_weight()
         # Early stopping
         if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
         # if thing > self.best_acc :
@@ -118,13 +137,22 @@ class Network(nn.Module):
                 return True
             else:
                 return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
 
 class Model2(nn.Module):
     def __init__(self,num_classes, in_channels=2, aux_feat=1089):
         super().__init__()
         self.cls = Network(num_classes,in_channels)
+        self.calc_feat_dim(num_classes)
         self.aux = nn.Sequential(
-            nn.Linear(5490,512),
+            nn.Linear(self.aux_dim,512),
             nn.ReLU(),
             nn.Linear(512, 64),
             nn.ReLU(),
@@ -137,6 +165,24 @@ class Model2(nn.Module):
         self.patience = 10
         self.e_ratio = 100
         self.in_ch = in_channels
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_acc': 0,
+            'val_acc': 0,
+            'val_loss': -np.inf
+        }
 
     def forward(self,x,y):
 
@@ -192,6 +238,14 @@ class Model2(nn.Module):
             embedding = torch.concat([y_hat_ohe, embed], dim=2)
 
         return embedding
+
+
+    def calc_feat_dim(self, n, n_sample=5):
+        x = torch.randn(1,1024,2)
+        _, embed = self.cls(x)
+        dim = (embed.shape[1] + n) * n_sample
+        self.aux_dim = dim
+
     
     def early_stopping(self,thing,epoch):
 
@@ -200,6 +254,7 @@ class Model2(nn.Module):
         just use "-loss"
 
         '''
+        self.check_weight()
         # Early stopping
         if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
         # if thing > self.best_acc :
@@ -221,6 +276,15 @@ class Model2(nn.Module):
                 return True
             else:
                 return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                # print(f'Replacing weight for best \'{k}\'')
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
 
 
 

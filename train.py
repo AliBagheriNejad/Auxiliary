@@ -54,11 +54,15 @@ a = utils.train_classifier(
     train_loader,
     test_loader,
     epochs=2,
-    early_stopping='val_loss'
+    early_stopping='val_loss',
+    alpha = 0.5,
 )
 
 b = utils.show_report(model, X_train_scaled_tensor, y_train_tensor, list(label_map.keys()))
-print(b,type(b))
+c = utils.calc_cm(model, X_train_scaled_tensor, y_train_tensor)
+
+print(c)
+utils.save_cm(c, list(label_map.keys()))
 
 
 

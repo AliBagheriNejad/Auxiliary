@@ -192,14 +192,14 @@ class Model2(nn.Module):
         y_mid = y[:,2]
         y_mid_ohe = self.label_coder(y_mid)
 
-        x, embed = self.cls(x_mid)
-        x = self.concat_embd(x,embed)
+        x_cls, embed = self.cls(x_mid)
+        x = self.concat_embd(x_cls,embed)
 
         x = torch.concat([x,red_embed], dim=1)
         x = x.reshape(x.shape[0], -1)
         x = self.aux(x)
 
-        return F.softmax(x, dim=1)
+        return F.softmax(x, dim=1), F.softmax(x_cls, dim=1)
 
 
     def other_emb(self,x,y):

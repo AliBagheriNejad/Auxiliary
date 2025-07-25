@@ -1,7 +1,13 @@
 import pickle
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.manifold import TSNE
+from umap import UMAP
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
+import pandas as pd
 import tqdm
 import os
 import shutil
@@ -40,11 +46,12 @@ def tensor_it(X, y, for_aux=True):
 
     if for_aux:
         X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
-        y_tensor = torch.tensor(y, dtype=torch.long).to(device)
+        # y_tensor = torch.tensor(y, dtype=torch.long).to(device)
     else:
         X_tensor = torch.tensor(X[:,2,:,:], dtype=torch.float32).to(device)
-        y_tensor = torch.tensor(y[:,2], dtype=torch.long).to(device)
-
+        # y_tensor = torch.tensor(y[:,2], dtype=torch.long).to(device)
+    
+    y_tensor = torch.tensor(y, dtype=torch.long).to(device)
     return X_tensor, y_tensor
 
 def label_encoder(y):
@@ -78,7 +85,8 @@ def  train_classifier(
         val_dataloader,
         epochs = 100,
         early_stopping = 'val_loss',
-        mode = 'aux'
+        mode = 'aux',
+        alpha = 0.1
 ):
 
     '''
@@ -117,21 +125,22 @@ def  train_classifier(
         for i, (batch_data, batch_labels) in progress_bar:
             batch_data = batch_data.to(device)
             batch_labels = batch_labels.to(device)
+            batch_label = batch_labels[:,2]
             optimizer.zero_grad()
 
             if mode == 'aux':
-                outputs = model(batch_data, batch_labels)
+                outputs, outputs_cls = model(batch_data, batch_labels)
+                loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
             else:
                 outputs = model(batch_data)
-            batch_labels = batch_labels[:,2]
-            loss = criterion(outputs, batch_labels)
+                loss = criterion(outputs, batch_label)
             loss.backward()
             optimizer.step()
 
             train_loss += loss.item()
             _, predicted = torch.max(outputs, 1)
             total_train += batch_labels.size(0)
-            correct_train += (predicted == batch_labels).sum().item()
+            correct_train += (predicted == batch_label).sum().item()
 
             progress_bar.set_postfix(train_loss=train_loss / (i + 1), train_acc=100 * correct_train / total_train)
         
@@ -150,18 +159,18 @@ def  train_classifier(
             for batch_data, batch_labels in val_dataloader:
                 batch_data = batch_data.to(device)
                 batch_labels = batch_labels.to(device)
+                batch_label = batch_labels[:,2]
                 if mode == 'aux':
-                    outputs = model(batch_data, batch_labels)
+                    outputs, outputs_cls = model(batch_data, batch_labels)
+                    loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
                 else:
                     outputs = model(batch_data)
-                    
-                batch_labels = batch_labels[:,2]
-                loss = criterion(outputs, batch_labels)
+                    loss = criterion(outputs, batch_label)
 
                 valid_loss += loss.item()
                 _, predicted = torch.max(outputs, 1)
                 total_valid += batch_labels.size(0)
-                correct_valid += (predicted == batch_labels).sum().item()
+                correct_valid += (predicted == batch_label).sum().item()
 
         val_loss_log = valid_loss / len(val_dataloader)
         val_acc_log = 100 * correct_valid / total_valid
@@ -207,15 +216,111 @@ def show_report(model, X, y, label_names, split='Train'):
         y_pred,
         target_names=label_names
     )
+    report = split + ' classification report\n' + report
     return report
 
 def model_forward(model,X,y):
     model.eval()
     with torch.no_grad():
         try:
-            outputs = model(X)
+            outputs, _ = model(X)
         except TypeError:
-            outputs = model(X,y)
+            outputs, _ = model(X,y)
         _, predicted = torch.max(outputs, 1)
     return predicted
 
+def calc_cm(model, X, y, mode='percent'):
+    predicted = model_forward(model, X, y)
+
+    y_pred = predicted.cpu().numpy()
+    y_true = y.cpu().numpy()[:,2]
+
+    cm = confusion_matrix(y_true, y_pred)
+    if mode == 'percent':
+        cm_sum = np.sum(cm, axis=1).reshape(-1,1)
+        cm = cm/cm_sum * 100
+        cm = np.round(cm,2)
+
+    return cm
+
+def save_cm(cm, label_names, split='Train'):
+    header = '\t'.join([''] + label_names)
+
+    rows = []
+    for i, row in enumerate(cm):
+        row_str = '\t'.join([label_names[i]] + [str(x) for x in row])
+        rows.append(row_str)
+    
+    content = '\n'.join([header] + rows)
+    
+    # Write to file
+    with open(os.path.join('temp', 'cm_'+split+'.txt'), 'w') as f:
+        f.write(content)
+
+def show_cm(path):
+    df = pd.read_csv(path, sep='\t', index_col=0)
+    
+    # Create the plot
+    plt.figure(figsize=(10, 8))
+    sns.set(font_scale=1.0)
+    
+    # Create heatmap with annotations
+    ax = sns.heatmap(df, annot=True, fmt='d', cmap='Blues', 
+                     cbar=True, linewidths=0.5, linecolor='gray')
+    
+    # Add labels and title
+    ax.set_xlabel('Predicted Labels', fontsize=14)
+    ax.set_ylabel('True Labels', fontsize=14)
+    ax.set_title('Confusion Matrix', fontsize=16)
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
+    # Adjust layout and show plot
+    plt.tight_layout()
+    plt.show()
+
+def get_features(model,X):
+    model.eval()
+    X = X[:,2,:,:]
+    with torch.no_grad():
+        try:
+            _, features = model(X)
+        except TypeError:
+            _, features = model.cls(X)
+    features = features.cpu().numpy()
+    return features
+
+def reduce_dim(features, method='tsne', n=2):
+
+    if method == 'tsne':
+        reducer = TSNE(n_components=n, random_state=69)
+    elif method == 'umap':
+        reducer = UMAP(n_components=n, random_state=69)
+
+    print(f'Starting to reduce dimentionality of {features.shape[0]} datapoints')
+    embedding = reducer.fit_transform(features)
+
+    return embedding
+
+def plot_dist(embed, y, label_names):
+    
+    markers = ['o', 'v', 'X']
+    y = y.cpu().numpy()
+    if len(y.shape) == 2:
+        y = y[:,2]
+
+    for i in range(len(label_names)):
+        indx = y == i
+        plt.scatter(
+            embed[indx,0], 
+            embed[indx,1], 
+            label=label_names[i], 
+            marker= markers[int(i//10)]
+        )
+
+    plt.xlabel('Dimention 1')
+    plt.ylabel('Dimention 2')
+    plt.legend()
+    plt.show()

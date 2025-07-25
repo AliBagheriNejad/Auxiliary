@@ -1,0 +1,15 @@
+artifact_uri: file:///F:/thesis/Articles/2nd/code/mlruns/623922822895938578/13b0f900b86740e5845f0dec2bdea60d/artifacts
+end_time: 1753473982837
+entry_point_name: ''
+experiment_id: '623922822895938578'
+lifecycle_stage: active
+run_id: 13b0f900b86740e5845f0dec2bdea60d
+run_name: traveling-frog-834
+run_uuid: 13b0f900b86740e5845f0dec2bdea60d
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753473900295
+status: 3
+tags: []
+user_id: HAMI-PARS

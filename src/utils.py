@@ -13,6 +13,7 @@ import os
 import shutil
 import torch
 from torch.utils.data import TensorDataset, DataLoader
+import mlflow
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -185,6 +186,10 @@ def  train_classifier(
             'val_acc': val_acc_log,
             'val_loss': -val_loss_log
         }
+        # for k in model.metrics_now.keys():
+        mlflow.log_metrics(model.metrics_now, synchronous=True, step=epoch+1)
+        # mlflow.log_metric('train acc', model.metrics_now['train_acc'])
+        mlflow.log_param('alpha', alpha)
 
         # Early stopping
         if early_stopping == 'val_acc':
@@ -305,7 +310,8 @@ def reduce_dim(features, method='tsne', n=2):
     return embedding
 
 def plot_dist(embed, y, label_names):
-    
+
+    fig, _ = plt.figure(figsize=(15,10))
     markers = ['o', 'v', 'X']
     y = y.cpu().numpy()
     if len(y.shape) == 2:
@@ -322,5 +328,6 @@ def plot_dist(embed, y, label_names):
 
     plt.xlabel('Dimention 1')
     plt.ylabel('Dimention 2')
-    plt.legend()
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.show()
+    return fig

@@ -61,19 +61,18 @@ def get_data():
 
     return X_train_scaled_tensor, y_train_tensor, X_test_scaled_tensor, y_test_tensor
 
+def show_feat_dist():
+    weight_dir = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
 
+    X, y, X_t, y_t = get_data()
 
-weight_dir = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
+    model = Model2(26)
+    model.load_state_dict(torch.load(weight_dir, map_location=device))
 
-X, y, X_t, y_t = get_data()
+    featus = utils.get_features(model, X)
+    embeding = utils.reduce_dim(featus)
+    utils.plot_dist(embeding, y, list(label_map.keys()))
 
-model = Model2(26)
-model.load_state_dict(torch.load(weight_dir, map_location=device))
-
-featus = utils.get_features(model, X)
-embeding = utils.reduce_dim(featus)
-utils.plot_dist(embeding, y, list(label_map.keys()))
-print(embeding)
 
 
 

@@ -232,7 +232,7 @@ def model_forward(model,X,y):
         try:
             outputs, _ = model(X[:,2,:,:])
         except TypeError:
-            outputs, _ = model(X,y)
+            outputs, _ = model.cls(X[:,2,:,:])
         _, predicted = torch.max(outputs, 1)
     return predicted
 

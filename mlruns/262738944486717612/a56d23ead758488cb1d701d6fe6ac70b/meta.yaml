@@ -1,0 +1,15 @@
+artifact_uri: file:///F:/thesis/Articles/2nd/code/mlruns/262738944486717612/a56d23ead758488cb1d701d6fe6ac70b/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '262738944486717612'
+lifecycle_stage: active
+run_id: a56d23ead758488cb1d701d6fe6ac70b
+run_name: spiffy-fowl-807
+run_uuid: a56d23ead758488cb1d701d6fe6ac70b
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753499173776
+status: 1
+tags: []
+user_id: HAMI-PARS

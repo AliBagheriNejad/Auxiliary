@@ -42,7 +42,7 @@ train_loader = utils.make_loader(X_train_scaled_tensor,y_train_tensor, 128)
 test_loader = utils.make_loader(X_test_scaled_tensor,y_test_tensor, 128)
 
 
-experiment_name = 'Auxilixary'
+experiment_name = 'Usual'
 experiment = mlflow.get_experiment_by_name(experiment_name)
 if experiment is None:
     mlflow.create_experiment(experiment_name)
@@ -52,7 +52,8 @@ mlflow.start_run()
 mlflow.log_param('label map',label_map)
 mlflow.log_param('data_shape', data.shape)
 
-model = models.Model2(26).to(device)
+# model = models.Model2(26).to(device)
+model = models.Network(26).to(device)
 model.save_path = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100
@@ -69,6 +70,7 @@ a = utils.train_classifier(
     epochs=3,
     early_stopping='val_loss',
     alpha = 0.5,
+    mode = 'usual'
 )
 
 

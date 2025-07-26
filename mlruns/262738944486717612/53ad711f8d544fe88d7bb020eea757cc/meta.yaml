@@ -1,0 +1,15 @@
+artifact_uri: file:///F:/thesis/Articles/2nd/code/mlruns/262738944486717612/53ad711f8d544fe88d7bb020eea757cc/artifacts
+end_time: 1753499523123
+entry_point_name: ''
+experiment_id: '262738944486717612'
+lifecycle_stage: active
+run_id: 53ad711f8d544fe88d7bb020eea757cc
+run_name: placid-wren-872
+run_uuid: 53ad711f8d544fe88d7bb020eea757cc
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753499474929
+status: 3
+tags: []
+user_id: HAMI-PARS

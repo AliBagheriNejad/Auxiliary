@@ -133,7 +133,8 @@ def  train_classifier(
                 outputs, outputs_cls = model(batch_data, batch_labels)
                 loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
             else:
-                outputs = model(batch_data)
+                batch_data = batch_data[:,2,:,:]
+                outputs,_ = model(batch_data)
                 loss = criterion(outputs, batch_label)
             loss.backward()
             optimizer.step()
@@ -165,7 +166,8 @@ def  train_classifier(
                     outputs, outputs_cls = model(batch_data, batch_labels)
                     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
                 else:
-                    outputs = model(batch_data)
+                    batch_data = batch_data[:,2,:,:]
+                    outputs, _ = model(batch_data)
                     loss = criterion(outputs, batch_label)
 
                 valid_loss += loss.item()
@@ -228,7 +230,7 @@ def model_forward(model,X,y):
     model.eval()
     with torch.no_grad():
         try:
-            outputs, _ = model(X)
+            outputs, _ = model(X[:,2,:,:])
         except TypeError:
             outputs, _ = model(X,y)
         _, predicted = torch.max(outputs, 1)

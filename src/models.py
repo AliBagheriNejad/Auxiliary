@@ -285,9 +285,84 @@ class Model2(nn.Module):
                 # print(f'Replacing weight for best \'{k}\'')
                 self.metrics_best[k] = self.metrics_now[k]
                 self.weight_dic[k] = self.state_dict()
+class Auxilixary(nn.Module):
+
+    def __init__(self, num_classes, input_dim=1050*5):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim,512),
+            nn.ReLU(),
+            nn.Linear(512, 64),
+            nn.ReLU(),
+            nn.Linear(64,num_classes)
+        )
+        self.best_acc = 0
+        self.save_path = 'model_weights.pth'
+        self.patience = 10
+        self.e_ratio = 100
+        # self.in_ch = in_channels
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_acc': 0,
+            'val_acc': 0,
+            'val_loss': -np.inf
+        }
+
+    def forward(self, x):
+        x = x.reshape(x.shape[0], -1)
+        x = self.model(x)
+        return F.softmax(x, dim=1)
+    
+    def early_stopping(self,thing,epoch):
+
+        '''
+        Incase you wanted to use best loss
+        just use "-loss"
+
+        '''
+        self.check_weight()
+        # Early stopping
+        if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
+        # if thing > self.best_acc :
 
 
+            self.best_acc = thing
+            self.best_epoch = epoch
+            self.current_patience = 0
 
+            # Save the model's weights
+            torch.save(self.state_dict(), self.save_path)
+            print("<<<<<<<  !Model saved!  >>>>>>>")
+            return False
+        else:
+            self.current_patience += 1
+            # Check if the patience limit is reached
+            if self.current_patience >= self.patience:
+                print("Early stopping triggered!")
+                return True
+            else:
+                return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                # print(f'Replacing weight for best \'{k}\'')
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
 
 
 

@@ -38,11 +38,16 @@ X_train, X_test, y_train, y_test = train_test_split(
 X_train_scaled_tensor, y_train_tensor = utils.tensor_it(X_train_scaled,y_train)
 X_test_scaled_tensor, y_test_tensor = utils.tensor_it(X_test_scaled,y_test)
 
+X_train_scaled_tensor = utils.read_pkl('Data/features_train.pkl')
+X_test_scaled_tensor = utils.read_pkl('Data/features_test.pkl')
+y_train_tensor = utils.read_pkl('Data/y_train.pkl')
+y_test_tensor = utils.read_pkl('Data/y_test.pkl')
+
 train_loader = utils.make_loader(X_train_scaled_tensor,y_train_tensor, 128)
 test_loader = utils.make_loader(X_test_scaled_tensor,y_test_tensor, 128)
 
 
-experiment_name = 'Usual'
+experiment_name = 'Auxiliary'
 experiment = mlflow.get_experiment_by_name(experiment_name)
 if experiment is None:
     mlflow.create_experiment(experiment_name)
@@ -53,7 +58,8 @@ mlflow.log_param('label map',label_map)
 mlflow.log_param('data_shape', data.shape)
 
 # model = models.Model2(26).to(device)
-model = models.Network(26).to(device)
+# model = models.Network(26).to(device)
+model = models.Auxilixary(26).to(device)
 model.save_path = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100
@@ -70,15 +76,20 @@ a = utils.train_classifier(
     epochs=3,
     early_stopping='val_loss',
     alpha = 0.5,
-    mode = 'usual'
+    mode = 'justaux'
 )
 
 
-
+# try:
 train_cr = utils.show_report(model, X_train_scaled_tensor, y_train_tensor, list(label_map.keys()))
 test_cr = utils.show_report(model, X_test_scaled_tensor, y_test_tensor, list(label_map.keys()), split='Test')
 train_cm = utils.calc_cm(model, X_train_scaled_tensor, y_train_tensor)
 test_cm = utils.calc_cm(model, X_test_scaled_tensor, y_test_tensor)
+# except ValueError:
+#     train_cr = utils.show_report(model, X_train_scaled_tensor, y_train_tensor[:,2], list(label_map.keys()))
+#     test_cr = utils.show_report(model, X_test_scaled_tensor, y_test_tensor[:,2], list(label_map.keys()), split='Test')
+#     train_cm = utils.calc_cm(model, X_train_scaled_tensor, y_train_tensor[:,2])
+#     test_cm = utils.calc_cm(model, X_test_scaled_tensor, y_test_tensor[:,2])
 
 utils.save_cm(train_cm, list(label_map.keys()))
 utils.save_cm(test_cm, list(label_map.keys()), split="Test")

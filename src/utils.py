@@ -132,6 +132,9 @@ def  train_classifier(
             if mode == 'aux':
                 outputs, outputs_cls = model(batch_data, batch_labels)
                 loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+            elif mode == 'justaux':
+                outputs = model(batch_data)
+                loss = criterion(outputs, batch_label)
             else:
                 batch_data = batch_data[:,2,:,:]
                 outputs,_ = model(batch_data)
@@ -165,6 +168,9 @@ def  train_classifier(
                 if mode == 'aux':
                     outputs, outputs_cls = model(batch_data, batch_labels)
                     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+                elif mode == 'justaux':
+                    outputs = model(batch_data)
+                    loss = criterion(outputs, batch_label)                
                 else:
                     batch_data = batch_data[:,2,:,:]
                     outputs, _ = model(batch_data)
@@ -233,7 +239,10 @@ def model_forward(model,X,y):
             outputs, _ = model(X[:,2,:,:])
         except TypeError:
             outputs, _ = model.cls(X[:,2,:,:])
-        _, predicted = torch.max(outputs, 1)
+            _, predicted = torch.max(outputs, 1)
+        except IndexError:
+            outputs = model(X)
+            _, predicted = torch.max(outputs, 1)
     return predicted
 
 def calc_cm(model, X, y, mode='percent'):
@@ -311,9 +320,9 @@ def reduce_dim(features, method='tsne', n=2):
 
     return embedding
 
-def plot_dist(embed, y, label_names):
+def plot_dist(embed, y, label_names, hold=False, title=None):
 
-    fig, _ = plt.figure(figsize=(15,10))
+    fig = plt.figure(figsize=(15,10))
     markers = ['o', 'v', 'X']
     y = y.cpu().numpy()
     if len(y.shape) == 2:
@@ -331,5 +340,36 @@ def plot_dist(embed, y, label_names):
     plt.xlabel('Dimention 1')
     plt.ylabel('Dimention 2')
     plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.show()
+    if title:
+        plt.title(title)
+    if not hold:
+        plt.show()
     return fig
+
+def load_model(model, path:str):
+    if path.endswith('.pth'):
+        w_dir = path
+    else:
+        w_dir = os.path.join(path, 'test_weight.pth')
+    model.load_state_dict(torch.load(w_dir, map_location=device))
+    return model
+
+def pred_mat(X, y, y_hat, names):
+
+    y = y[:,2]
+    pred_dic = {}
+    
+    # Precompute masks for true labels
+    true_masks = {name: (y == name) for name in names}
+    
+    # Precompute masks for predicted labels
+    pred_masks = {name: (y_hat == name) for name in names}
+    
+    for true_name in names:
+        true_mask = true_masks[true_name]
+        for pred_name in names:
+            # Use logical_and instead of 'and' for element-wise operation
+            mask = np.logical_and(true_mask, pred_masks[pred_name])
+            pred_dic[f'{true_name}_{pred_name}'] = X[mask, 2, :, :]
+    
+    return pred_dic

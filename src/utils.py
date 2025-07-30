@@ -237,6 +237,7 @@ def model_forward(model,X,y):
     with torch.no_grad():
         try:
             outputs, _ = model(X[:,2,:,:])
+            _, predicted = torch.max(outputs, 1)
         except TypeError:
             outputs, _ = model.cls(X[:,2,:,:])
             _, predicted = torch.max(outputs, 1)
@@ -273,21 +274,25 @@ def save_cm(cm, label_names, split='Train'):
     with open(os.path.join('temp', 'cm_'+split+'.txt'), 'w') as f:
         f.write(content)
 
-def show_cm(path):
+def show_cm(path, dtype='d', title='', fig_size=(20,16)):
     df = pd.read_csv(path, sep='\t', index_col=0)
     
     # Create the plot
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=fig_size)
     sns.set(font_scale=1.0)
     
     # Create heatmap with annotations
-    ax = sns.heatmap(df, annot=True, fmt='d', cmap='Blues', 
-                     cbar=True, linewidths=0.5, linecolor='gray')
+    if dtype=='d':
+        ax = sns.heatmap(df, annot=True, fmt='d', cmap='Blues', 
+                        cbar=True, linewidths=0.5, linecolor='gray')
+    elif dtype=='f':
+        ax = sns.heatmap(df, annot=True, fmt='.2f', cmap='Blues', 
+                        cbar=True, linewidths=0.5, linecolor='gray')
     
     # Add labels and title
     ax.set_xlabel('Predicted Labels', fontsize=14)
     ax.set_ylabel('True Labels', fontsize=14)
-    ax.set_title('Confusion Matrix', fontsize=16)
+    ax.set_title(f'Confusion Matrix ({title})', fontsize=16)
     
     # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha='right')

@@ -130,14 +130,14 @@ def  train_classifier(
             optimizer.zero_grad()
 
             if mode == 'aux':
-                outputs, outputs_cls = model(batch_data, batch_labels)
+                outputs, outputs_cls = model(batch_data, batch_labels).to(device)
                 loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
             elif mode == 'justaux':
-                outputs = model(batch_data)
+                outputs = model(batch_data).to(device)
                 loss = criterion(outputs, batch_label)
             else:
                 batch_data = batch_data[:,2,:,:]
-                outputs,_ = model(batch_data)
+                outputs,_ = model(batch_data).to(device)
                 loss = criterion(outputs, batch_label)
             loss.backward()
             optimizer.step()
@@ -166,14 +166,14 @@ def  train_classifier(
                 batch_labels = batch_labels.to(device)
                 batch_label = batch_labels[:,2]
                 if mode == 'aux':
-                    outputs, outputs_cls = model(batch_data, batch_labels)
+                    outputs, outputs_cls = model(batch_data, batch_labels).to(device)
                     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
                 elif mode == 'justaux':
-                    outputs = model(batch_data)
+                    outputs = model(batch_data).to(device)
                     loss = criterion(outputs, batch_label)                
                 else:
                     batch_data = batch_data[:,2,:,:]
-                    outputs, _ = model(batch_data)
+                    outputs, _ = model(batch_data).to(device)
                     loss = criterion(outputs, batch_label)
 
                 valid_loss += loss.item()

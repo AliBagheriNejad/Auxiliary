@@ -46,8 +46,11 @@ y_test_tensor = utils.read_pkl('Data/y_test.pkl')
 train_loader = utils.make_loader(X_train_scaled_tensor,y_train_tensor, 128)
 test_loader = utils.make_loader(X_test_scaled_tensor,y_test_tensor, 128)
 
+if mlflow.active_run():
+    mlflow.end_run()
 
-experiment_name = 'Auxiliary'
+
+experiment_name = 'justAuxiliary'
 experiment = mlflow.get_experiment_by_name(experiment_name)
 if experiment is None:
     mlflow.create_experiment(experiment_name)
@@ -60,6 +63,7 @@ mlflow.log_param('data_shape', data.shape)
 # model = models.Model2(26).to(device)
 # model = models.Network(26).to(device)
 model = models.Auxilixary(26).to(device)
+model = models.TransformerClassifier(input_dim=1050, d_model=1050*5, nhead=5, num_classes=26)
 model.save_path = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100
@@ -73,7 +77,7 @@ a = utils.train_classifier(
     optimizer,
     train_loader,
     test_loader,
-    epochs=3,
+    epochs=1,
     early_stopping='val_loss',
     alpha = 0.5,
     mode = 'justaux'

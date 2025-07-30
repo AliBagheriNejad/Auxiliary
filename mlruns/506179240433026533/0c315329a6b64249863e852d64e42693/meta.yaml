@@ -1,0 +1,14 @@
+artifact_uri: file:///F:/thesis/Articles/2nd/code/mlruns/506179240433026533/0c315329a6b64249863e852d64e42693/artifacts
+end_time: 1753637075866
+entry_point_name: ''
+experiment_id: '506179240433026533'
+lifecycle_stage: active
+run_id: 0c315329a6b64249863e852d64e42693
+run_name: luminous-chimp-565
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1753637042875
+status: 3
+tags: []
+user_id: HAMI-PARS

@@ -285,12 +285,17 @@ class Model2(nn.Module):
                 # print(f'Replacing weight for best \'{k}\'')
                 self.metrics_best[k] = self.metrics_now[k]
                 self.weight_dic[k] = self.state_dict()
+
 class Auxilixary(nn.Module):
 
     def __init__(self, num_classes, input_dim=1050*5):
         super().__init__()
         self.model = nn.Sequential(
-            nn.Linear(input_dim,512),
+            nn.Linear(input_dim,1024),
+            nn.ReLU(),
+            nn.Linear(1024,512),
+            nn.ReLU(),
+            nn.Linear(512,512),
             nn.ReLU(),
             nn.Linear(512, 64),
             nn.ReLU(),
@@ -364,7 +369,113 @@ class Auxilixary(nn.Module):
                 self.metrics_best[k] = self.metrics_now[k]
                 self.weight_dic[k] = self.state_dict()
 
+# Positional Encoding for Transformer
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model)) #‌ This formula is used to create positional embedding
+        pe[:, 0::2] = torch.sin(position * div_term) # Positional embedding for even indices
+        pe[:, 1::2] = torch.cos(position * div_term) # Positional embedding for odd indices
+        pe = pe.unsqueeze(0)  # Shape: (1, max_len, d_model)
+        self.register_buffer('pe', pe)
 
+    def forward(self, x):
+        # x: (batch_size, seq_len, d_model)
+        x = x + self.pe[:, :x.size(1), :]
+        return x
+
+# Transformer Classifier Model
+class TransformerClassifier(nn.Module):
+    def __init__(self, input_dim=100, d_model=100, nhead=4, num_layers=2, dim_feedforward=512, num_classes=2):
+        super(TransformerClassifier, self).__init__()
+        self.d_model = d_model
+        # Project input features to d_model if needed
+        self.input_proj = nn.Linear(input_dim, d_model) if input_dim != d_model else nn.Identity()
+        self.pos_encoder = PositionalEncoding(d_model)
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            batch_first=True
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.classifier = nn.Linear(d_model, num_classes)
+        self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
+
+        self.best_acc = 0
+        self.save_path = 'model_weights.pth'
+        self.patience = 10
+        self.e_ratio = 100
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_acc': 0,
+            'val_acc': 0,
+            'val_loss': -np.inf
+        }
+
+    def forward(self, x):
+        # x: (batch_size, seq_len, input_dim)
+        x = self.input_proj(x)  # (batch_size, seq_len, d_model)
+        x = self.pos_encoder(x)  # Add positional encoding
+        x = self.transformer_encoder(x)  # (batch_size, seq_len, d_model)
+        # Pooling: take mean across sequence dimension
+        x = x.mean(dim=1)  # (batch_size, d_model)
+        logits = self.classifier(x)  # (batch_size, num_classes)
+
+        return F.softmax(logits,dim=1)
+    
+    def early_stopping(self,thing,epoch):
+
+        '''
+        Incase you wanted to use best loss
+        just use "-loss"
+
+        '''
+        self.check_weight()
+        # Early stopping
+        if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
+        # if thing > self.best_acc :
+
+
+            self.best_acc = thing
+            self.best_epoch = epoch
+            self.current_patience = 0
+
+            # Save the model's weights
+            torch.save(self.state_dict(), self.save_path)
+            print("<<<<<<<  !Model saved!  >>>>>>>")
+            return False
+        else:
+            self.current_patience += 1
+            # Check if the patience limit is reached
+            if self.current_patience >= self.patience:
+                print("Early stopping triggered!")
+                return True
+            else:
+                return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                # print(f'Replacing weight for best \'{k}\'')
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
 
 
 

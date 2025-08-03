@@ -4,7 +4,7 @@ import os
 import matplotlib.pyplot as plt
 from typing import Optional, Tuple, List
 
-def extract_signals(path) -> Optional[Tuple]:
+def extract_signals_mat(path) -> Optional[Tuple]:
 
     def select():
         keys = select_keys(path, file)
@@ -48,14 +48,45 @@ def save_csv():
         f.write(','.join(column_names) + '\n')
         np.savetxt(f, data, delimiter=',',fmt='%.10f')
 
-data_dir = r'D:\Masters\CWRU-dataset\48k_Drive_End_Bearing_Fault_Data'
+def for_mat_data():
+    data_dir = r'D:\Masters\CWRU-dataset\48k_Drive_End_Bearing_Fault_Data'
 
-for root, dirs, files in os.walk(data_dir):
-    if not (len(files) == 0) :
-        path_files = [os.path.join(root,f) for f in files if f.endswith('.mat')]
-        for path_f in path_files:
-            data = extract_signals(path_f)
-            new_path_f = new_path(path_f)
-            save_csv()
+    for root, dirs, files in os.walk(data_dir):
+        if not (len(files) == 0) :
+            path_files = [os.path.join(root,f) for f in files if f.endswith('.mat')]
+            for path_f in path_files:
+                data = extract_signals_mat(path_f)
+                new_path_f = new_path(path_f)
+                save_csv()
 
+def path_2_name(path):
+    if '\\' in path:
+        parts = path.split('\\')
+    elif '/' in path:
+        parts = path.split('/')
+    else:
+        raise('This is not a directory path')
+    
+    name = '_'.join(parts[3:])
+    return name
 
+data_dir = r'D:\Masters\MaFaulDa'
+final_dir = r'F:\thesis\Articles\2nd\code\Data\mafaulda'
+
+for path, dirs, files in os.walk(data_dir):
+
+    if len(files) != 0:
+        file_paths = [os.path.join(path,f) for f in files if f.endswith('.csv')]
+        file_paths = file_paths[:2]
+        data_list = []
+        for file_path in file_paths :
+            data = np.loadtxt(file_path, delimiter=',')
+            data_list.append(data)
+        total_data = np.concatenate(data_list, axis=0)
+        file_name = path_2_name(path)
+        file_name = file_name + '.csv'
+        save_dir = os.path.join(final_dir, file_name)
+        np.savetxt(save_dir, total_data, delimiter=',')
+    
+
+        

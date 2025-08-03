@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class FeatureExtractor(nn.Module):
     def __init__(self, drop=0.1, input_channels=1):
@@ -96,14 +96,17 @@ class Network(nn.Module):
             'val_loss': -np.inf
         }
 
-    def forward(self, x):
+    def forward(self, x, latent_in=True):
         if self.in_ch == 1:
             x = x.view(x.shape[0],  1, x.shape[1])  # Reshape input to (batch_size, channels, length)
         else:
             x = x.view(x.shape[0], x.shape[2] , x.shape[1])
         features = self.feature_extractor(x)
         x, latent = self.classifier(features)
-        embed = torch.concat([features.reshape(x.shape[0],-1), latent.reshape(x.shape[0],-1)], dim=1) ## change this if needed
+        if latent_in:
+            embed = torch.concat([features.reshape(x.shape[0],-1), latent.reshape(x.shape[0],-1)], dim=1) ## change this if needed
+        else:
+            embed = features.reshape(x.shape[0],-1)
 
         return x, embed
 
@@ -477,6 +480,116 @@ class TransformerClassifier(nn.Module):
                 self.metrics_best[k] = self.metrics_now[k]
                 self.weight_dic[k] = self.state_dict()
 
+class Model2Trans(nn.Module):
+    def __init__(self,num_classes, in_channels=2, aux_feat=1089):
+        super().__init__()
+        self.cls = Network(num_classes,in_channels).to(device)
+        self.calc_feat_dim(num_classes)
+        self.aux = TransformerClassifier(input_dim=1088-64+26, d_model=(1088-64+26)*5, nhead=5, num_classes=26).to(device)
+        self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
+
+        self.best_acc = 0
+        self.save_path = 'model_weights.pth'
+        self.patience = 10
+        self.e_ratio = 100
+        self.in_ch = in_channels
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_acc': 0,
+            'val_acc': 0,
+            'val_loss': -np.inf
+        }
+
+    def forward(self,x,y):
+
+        # red_embed = self.other_emb(x,y)
+
+        # x_mid = x[:,2,:,:] # Fix indexing for dyanimc model training
+        # y_mid = y[:,2]
+        y_mid_ohe = self.label_coder(y)
+
+        x_flat = x.reshape(x.shape[0]*x.shape[1], x.shape[2], x.shape[3])
+        x_cls, embed = self.cls(x_flat,latent_in=False)
+        x_cls = x_cls.reshape(x.shape[0], x.shape[1], -1)
+        embed = embed.reshape(x.shape[0], x.shape[1], -1)
+        x = self.concat_embd(x_cls,embed)
+
+        # x = torch.concat([x,red_embed], dim=1)
+        # x = x.reshape(x.shape[0], -1)
+        x = self.aux(x)
+
+        return F.softmax(x, dim=1), F.softmax(x_cls, dim=1)
+
+    def concat_embd(self, x, embed):
+
+        if len(x.shape)==2:
+            x = x.unsqueeze(1)
+            embed = embed.unsqueeze(1)
+        _, y_hat = torch.max(x, 2)
+        y_hat_ohe = self.label_coder(y_hat)
+        # y_hat_ohe = y_hat_ohe.reshape(-1,1)
+        if len(x.shape)==3:
+            embedding = torch.concat([y_hat_ohe, embed], dim=2)
+        if len(x.shape)==2:
+            embedding = torch.concat([y_hat_ohe, embed], dim=2)
+
+        return embedding
+
+    def calc_feat_dim(self, n, n_sample=5):
+        x = torch.randn(1,1024,2)
+        _, embed = self.cls(x)
+        dim = (embed.shape[1] + n) * n_sample
+        self.aux_dim = dim
+
+    
+    def early_stopping(self,thing,epoch):
+
+        '''
+        Incase you wanted to use best loss
+        just use "-loss"
+
+        '''
+        self.check_weight()
+        # Early stopping
+        if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
+        # if thing > self.best_acc :
 
 
+            self.best_acc = thing
+            self.best_epoch = epoch
+            self.current_patience = 0
+
+            # Save the model's weights
+            torch.save(self.state_dict(), self.save_path)
+            print("<<<<<<<  !Model saved!  >>>>>>>")
+            return False
+        else:
+            self.current_patience += 1
+            # Check if the patience limit is reached
+            if self.current_patience >= self.patience:
+                print("Early stopping triggered!")
+                return True
+            else:
+                return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                # print(f'Replacing weight for best \'{k}\'')
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
 

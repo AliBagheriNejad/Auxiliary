@@ -406,7 +406,7 @@ def  fine_tune_aux(
                 if os.path.isfile(file_path):
                     os.remove(file_path)
     def save_weight_dic():
-        for k,v in zip(model.cls.weight_dic.keys(), model.cls.weight_dic.values()):
+        for k,v in zip(model.weight_dic.keys(), model.weight_dic.values()):
             weight_name = f'{mode}_{k}_{np.abs(model.metrics_best[k]):.6f}.pth'
             weight_path = os.path.join('temp', weight_name)
             torch.save(v, weight_path)
@@ -469,6 +469,7 @@ def  fine_tune_aux(
                 batch_label = batch_labels[:,2]
                 if mode == 'aux':
                     outputs, outputs_cls = model(batch_data, batch_labels).to(device)
+                    outputs_cls = outputs_cls[:,2,:]
                     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
                 elif mode == 'justaux':
                     outputs = model(batch_data).to(device)
@@ -512,11 +513,11 @@ def  fine_tune_aux(
             do_break = model.early_stopping(-train_losses[-1],epoch)
 
         if do_break:
-            save_weight_dic()
+            # save_weight_dic()
             break
 
-    if not do_break:
-        save_weight_dic()
+    # if not do_break:
+    #     save_weight_dic()
 
     return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
 

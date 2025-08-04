@@ -415,11 +415,14 @@ def  fine_tune_aux(
     fix_temp()
     # Training loop (example, not complete)
     train_losses, train_accs, valid_losses, valid_accs = [], [], [], []
+    train_accs_cls = []
+    valid_accs_cls = []
 
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
         correct_train = 0
+        correct_train_cls = 0
         total_train = 0
 
         progress_bar = tqdm.tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch + 1}/{epochs}')
@@ -449,18 +452,25 @@ def  fine_tune_aux(
             total_train += batch_labels.size(0)
             correct_train += (predicted == batch_label).sum().item()
 
-            progress_bar.set_postfix(train_loss=train_loss / (i + 1), train_acc=100 * correct_train / total_train)
+            _, predicted_cls = torch.max(outputs_cls, 1)
+            total_train_cls += batch_labels.size(0)
+            correct_train_cls += (predicted_cls == batch_label).sum().item()
+
+            progress_bar.set_postfix(train_loss=train_loss / (i + 1), train_acc_cls = 100*correct_train_cls/total_train, train_acc=100 * correct_train / total_train)
         
         train_loss_log = train_loss / len(train_dataloader)
         train_acc_log = 100 * correct_train / total_train
+        train_acc_cls_log = 100 * correct_train_cls / total_train
         train_losses.append(train_loss_log)
         train_accs.append(train_acc_log)
+        train_accs_cls.append(train_acc_cls_log)
 
         # Validation
         model.eval()
         valid_loss = 0.0
-        correct_valid = 0
         total_valid = 0
+        correct_valid = 0
+        correct_valid_cls = 0
 
         with torch.no_grad():
             for batch_data, batch_labels in val_dataloader:
@@ -468,7 +478,7 @@ def  fine_tune_aux(
                 batch_labels = batch_labels.to(device)
                 batch_label = batch_labels[:,2]
                 if mode == 'aux':
-                    outputs, outputs_cls = model(batch_data, batch_labels).to(device)
+                    outputs, outputs_cls = model(batch_data, batch_labels)
                     outputs_cls = outputs_cls[:,2,:]
                     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
                 elif mode == 'justaux':
@@ -484,11 +494,17 @@ def  fine_tune_aux(
                 total_valid += batch_labels.size(0)
                 correct_valid += (predicted == batch_label).sum().item()
 
+                _, predicted_cls = torch.max(outputs_cls, 1)
+                total_valid_cls += batch_labels.size(0)
+                correct_valid_cls += (predicted_cls == batch_label).sum().item()
+
         val_loss_log = valid_loss / len(val_dataloader)
         val_acc_log = 100 * correct_valid / total_valid
+        val_acc_cls_log = 100 * correct_valid_cls / total_valid
         valid_losses.append(val_loss_log)
         valid_accs.append(val_acc_log)
-        print(f'validation_acc: {valid_accs[-1]:.1f}, validation_loss: {valid_losses[-1]:.4f}', end='\n')
+        valid_accs_cls.append(val_acc_cls_log)
+        print(f'validation_acc_cls: {valid_accs_cls[-1]:.1f}, validation_acc: {valid_accs[-1]:.1f}, validation_loss: {valid_losses[-1]:.4f}', end='\n')
 
 
         model.metrics_now = {

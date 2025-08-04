@@ -424,6 +424,7 @@ def  fine_tune_aux(
         correct_train = 0
         correct_train_cls = 0
         total_train = 0
+        total_train_cls = 0
 
         progress_bar = tqdm.tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch + 1}/{epochs}')
 
@@ -469,6 +470,7 @@ def  fine_tune_aux(
         model.eval()
         valid_loss = 0.0
         total_valid = 0
+        total_valid_cls = 0
         correct_valid = 0
         correct_valid_cls = 0
 

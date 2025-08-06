@@ -576,6 +576,13 @@ def  fine_tune_aux(
 
         aux_dic_c = model.aux.state_dict()
         cls_dic_c = model.cls.state_dict()
+        
+        if check_weight:
+            cls_check = check_weights(cls_dic_c, cls_dic_l)
+            aux_check = check_weights(aux_dic_c, aux_dic_l)
+
+            print(f'Classifier weight are the same {cls_check}')
+            print(f'Auxiliary weight are the same {aux_check}')
     # if not do_break:
     #     save_weight_dic()
 

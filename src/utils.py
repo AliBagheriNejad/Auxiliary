@@ -415,12 +415,13 @@ def  fine_tune_aux(
     fix_temp()
     # Training loop (example, not complete)
     train_losses, train_accs, valid_losses, valid_accs = [], [], [], []
-    train_accs_cls = []
-    valid_accs_cls = []
+    train_accs_cls, train_losses_cls = [], []
+    valid_accs_cls, valid_losses_cls = [], []
 
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
+        train_loss_cls = 0.0
         correct_train = 0
         correct_train_cls = 0
         total_train = 0
@@ -437,7 +438,9 @@ def  fine_tune_aux(
             if mode == 'aux':
                 outputs, outputs_cls = model(batch_data, batch_labels)
                 outputs_cls = outputs_cls[:,2,:]
-                loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+                loss_cls = (1-alpha)*criterion(outputs_cls,batch_label)
+                loss_aux = alpha*criterion(outputs, batch_label)
+                loss = loss_cls + loss_aux
             elif mode == 'justaux':
                 outputs = model(batch_data).to(device)
                 loss = criterion(outputs, batch_label)
@@ -448,7 +451,12 @@ def  fine_tune_aux(
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.item()
+            if mode == 'aux':
+                train_loss = loss.item()
+                train_loss_cls = loss_cls.item()
+            else:
+                train_loss += loss.item()
+
             _, predicted = torch.max(outputs, 1)
             total_train += batch_labels.size(0)
             correct_train += (predicted == batch_label).sum().item()
@@ -457,18 +465,23 @@ def  fine_tune_aux(
             total_train_cls += batch_labels.size(0)
             correct_train_cls += (predicted_cls == batch_label).sum().item()
 
-            progress_bar.set_postfix(train_loss=train_loss / (i + 1), train_acc_cls = 100*correct_train_cls/total_train, train_acc=100 * correct_train / total_train)
+            progress_bar.set_postfix(train_acc_cls = 100*correct_train_cls/total_train, train_acc=100 * correct_train / total_train,train_loss_cls=train_loss_cls/(i+1), train_loss=train_loss / (i + 1))
         
         train_loss_log = train_loss / len(train_dataloader)
+        train_loss_cls_log = train_loss_cls/len(train_dataloader)
+
         train_acc_log = 100 * correct_train / total_train
         train_acc_cls_log = 100 * correct_train_cls / total_train
+
         train_losses.append(train_loss_log)
+        train_losses_cls.append(train_loss_cls_log)
         train_accs.append(train_acc_log)
         train_accs_cls.append(train_acc_cls_log)
 
         # Validation
         model.eval()
         valid_loss = 0.0
+        valid_loss_cls = 0.0
         total_valid = 0
         total_valid_cls = 0
         correct_valid = 0
@@ -482,7 +495,9 @@ def  fine_tune_aux(
                 if mode == 'aux':
                     outputs, outputs_cls = model(batch_data, batch_labels)
                     outputs_cls = outputs_cls[:,2,:]
-                    loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+                    loss_cls = (1-alpha)*criterion(outputs_cls,batch_label)
+                    loss_aux = alpha*criterion(outputs, batch_label)
+                    loss = loss_cls + loss_aux
                 elif mode == 'justaux':
                     outputs = model(batch_data).to(device)
                     loss = criterion(outputs, batch_label)                
@@ -491,7 +506,13 @@ def  fine_tune_aux(
                     outputs, _ = model(batch_data).to(device)
                     loss = criterion(outputs, batch_label)
 
-                valid_loss += loss.item()
+                if mode == 'aux':
+                    valid_loss = loss.item()
+                    valid_loss_cls = loss_cls.item()
+                else:
+                    valid_loss += loss.item()
+                
+
                 _, predicted = torch.max(outputs, 1)
                 total_valid += batch_labels.size(0)
                 correct_valid += (predicted == batch_label).sum().item()
@@ -501,19 +522,26 @@ def  fine_tune_aux(
                 correct_valid_cls += (predicted_cls == batch_label).sum().item()
 
         val_loss_log = valid_loss / len(val_dataloader)
+        val_loss_cls_log = valid_loss_cls / len(val_dataloader)
         val_acc_log = 100 * correct_valid / total_valid
         val_acc_cls_log = 100 * correct_valid_cls / total_valid
+
         valid_losses.append(val_loss_log)
+        valid_losses_cls.append(val_loss_cls_log)
         valid_accs.append(val_acc_log)
         valid_accs_cls.append(val_acc_cls_log)
-        print(f'validation_acc_cls: {valid_accs_cls[-1]:.1f}, validation_acc: {valid_accs[-1]:.1f}, validation_loss: {valid_losses[-1]:.4f}', end='\n')
+        print(f'validation_acc: {valid_accs[-1]:.1f}, validation_acc_cls: {valid_accs_cls[-1]:.1f}, validation_loss: {valid_losses[-1]:.4f}, validation_loss_cls: {valid_losses_cls[-1]:.4f}', end='\n')
 
 
         model.metrics_now = {
             'train_loss': -train_loss_log,
+            'train_loss_cls': -train_loss_cls_log,
             'train_acc': train_acc_log,
+            'train_acc_cls': train_acc_cls_log,
             'val_acc': val_acc_log,
-            'val_loss': -val_loss_log
+            'val_acc_cls': val_acc_cls_log,
+            'val_loss': -val_loss_log,
+            'val_loss_cls': -val_loss_cls_log
         }
         # for k in model.metrics_now.keys():
         mlflow.log_metrics(model.metrics_now, synchronous=True, step=epoch+1)
@@ -523,12 +551,20 @@ def  fine_tune_aux(
         # Early stopping
         if early_stopping == 'val_acc':
             do_break = model.early_stopping(valid_accs[-1],epoch)
+        elif early_stopping == 'val_acc_cls':
+            do_break = model.early_stopping(valid_accs_cls[-1],epoch)
         elif early_stopping == 'val_loss':
             do_break = model.early_stopping(-valid_losses[-1],epoch)
+        elif early_stopping == 'val_loss_cls':
+            do_break = model.early_stopping(-valid_losses_cls[-1],epoch)
         elif early_stopping == 'train_acc':
             do_break = model.early_stopping(train_accs[-1],epoch)
+        elif early_stopping == 'train_acc_cls':
+            do_break = model.early_stopping(train_accs_cls[-1],epoch)
         elif early_stopping == 'train_loss':
             do_break = model.early_stopping(-train_losses[-1],epoch)
+        elif early_stopping == 'train_loss_cls':
+            do_break = model.early_stopping(-train_losses_cls[-1],epoch)
 
         if do_break:
             # save_weight_dic()
@@ -537,7 +573,7 @@ def  fine_tune_aux(
     # if not do_break:
     #     save_weight_dic()
 
-    return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
+    # return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
 
 
 

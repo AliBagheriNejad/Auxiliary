@@ -485,7 +485,7 @@ class Model2Trans(nn.Module):
         super().__init__()
         self.cls = Network(num_classes,in_channels).to(device)
         self.calc_feat_dim(num_classes)
-        self.aux = TransformerClassifier(input_dim=1088-64+26, d_model=(1088-64+26)*5, nhead=5, num_classes=26).to(device)
+        self.aux = TransformerClassifier(input_dim=1088+26, d_model=(1088+26)*5, nhead=5, num_classes=26).to(device)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
         self.best_acc = 0
@@ -501,15 +501,23 @@ class Model2Trans(nn.Module):
         }
         self.metrics_now = {
             'train_loss':None,
+            'train_loss_cls':None,
             'train_acc': None,
+            'train_acc_cls':None,
             'val_acc': None,
-            'val_loss': None
+            'val_acc_cls':None,
+            'val_loss': None,
+            'val_loss_cls':None
         }
         self.metrics_best = {
             'train_loss':-np.inf,
+            'train_loss_cls':-np.inf,
             'train_acc': 0,
+            'train_acc_cls': 0,
             'val_acc': 0,
-            'val_loss': -np.inf
+            'val_acc_cls': 0,
+            'val_loss': -np.inf,
+            'val_loss_cls': -np.inf
         }
 
     def forward(self,x,y):
@@ -521,7 +529,7 @@ class Model2Trans(nn.Module):
         y_mid_ohe = self.label_coder(y)
 
         x_flat = x.reshape(x.shape[0]*x.shape[1], x.shape[2], x.shape[3])
-        x_cls, embed = self.cls(x_flat,latent_in=False)
+        x_cls, embed = self.cls(x_flat,latent_in=True)
         x_cls = x_cls.reshape(x.shape[0], x.shape[1], -1)
         embed = embed.reshape(x.shape[0], x.shape[1], -1)
         x = self.concat_embd(x_cls,embed)

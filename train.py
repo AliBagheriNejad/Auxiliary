@@ -38,10 +38,10 @@ X_train, X_test, y_train, y_test = train_test_split(
 X_train_scaled_tensor, y_train_tensor = utils.tensor_it(X_train_scaled,y_train)
 X_test_scaled_tensor, y_test_tensor = utils.tensor_it(X_test_scaled,y_test)
 
-X_train_scaled_tensor = utils.read_pkl('Data/features_train.pkl')
-X_test_scaled_tensor = utils.read_pkl('Data/features_test.pkl')
-y_train_tensor = utils.read_pkl('Data/y_train.pkl')
-y_test_tensor = utils.read_pkl('Data/y_test.pkl')
+# X_train_scaled_tensor = utils.read_pkl('Data/features_train.pkl')
+# X_test_scaled_tensor = utils.read_pkl('Data/features_test.pkl')
+# y_train_tensor = utils.read_pkl('Data/y_train.pkl')
+# y_test_tensor = utils.read_pkl('Data/y_test.pkl')
 
 train_loader = utils.make_loader(X_train_scaled_tensor,y_train_tensor, 128)
 test_loader = utils.make_loader(X_test_scaled_tensor,y_test_tensor, 128)
@@ -62,8 +62,9 @@ mlflow.log_param('data_shape', data.shape)
 
 # model = models.Model2(26).to(device)
 # model = models.Network(26).to(device)
-model = models.Auxilixary(26).to(device)
-model = models.TransformerClassifier(input_dim=1050, d_model=1050*5, nhead=5, num_classes=26)
+# model = models.Auxilixary(26).to(device)
+# model = models.TransformerClassifier(input_dim=1050, d_model=1050*5, nhead=5, num_classes=26)
+model = models.Model2Trans(26).to(device)
 model.save_path = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100
@@ -71,16 +72,16 @@ model.e_ratio = 1000
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-a = utils.train_classifier(
+a = utils.fine_tune_aux(
     model,
     criterion,
     optimizer,
-    train_loader,
+    test_loader,
     test_loader,
     epochs=1,
-    early_stopping='val_loss',
+    early_stopping='val_loss_cls',
     alpha = 0.5,
-    mode = 'justaux'
+    mode = 'aux'
 )
 
 

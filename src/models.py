@@ -483,9 +483,9 @@ class TransformerClassifier(nn.Module):
 class Model2Trans(nn.Module):
     def __init__(self,num_classes, in_channels=2, aux_feat=1089):
         super().__init__()
-        self.cls = Network(num_classes,in_channels).to(device)
+        self.cls = Network(num_classes,in_channels)
         self.calc_feat_dim(num_classes)
-        self.aux = TransformerClassifier(input_dim=1088+26, d_model=(1088+26)*5, nhead=5, num_classes=26).to(device)
+        self.aux = TransformerClassifier(input_dim=1088+26, d_model=(1088+26)*1, nhead=1, num_classes=26)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
         self.best_acc = 0

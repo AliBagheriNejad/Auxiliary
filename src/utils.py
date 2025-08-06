@@ -130,14 +130,17 @@ def  train_classifier(
             optimizer.zero_grad()
 
             if mode == 'aux':
-                outputs, outputs_cls = model(batch_data, batch_labels).to(device)
+                outputs, outputs_cls = model(batch_data, batch_labels)
                 loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+            elif mode == 'auxt':
+                outputs, outputs_cls = model(batch_data, batch_labels)
+                loss = (1-alpha)*criterion(outputs_cls[:,2,:],batch_label) + alpha*criterion(outputs, batch_label)
             elif mode == 'justaux':
-                outputs = model(batch_data).to(device)
+                outputs = model(batch_data)
                 loss = criterion(outputs, batch_label)
             else:
                 batch_data = batch_data[:,2,:,:]
-                outputs,_ = model(batch_data).to(device)
+                outputs,_ = model(batch_data)
                 loss = criterion(outputs, batch_label)
             loss.backward()
             optimizer.step()
@@ -166,14 +169,20 @@ def  train_classifier(
                 batch_labels = batch_labels.to(device)
                 batch_label = batch_labels[:,2]
                 if mode == 'aux':
-                    outputs, outputs_cls = model(batch_data, batch_labels).to(device)
-                    loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+                    outputs, outputs_cls = model(batch_data, batch_labels)
+                    loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_labels)
+                elif mode == 'auxt':
+                    outputs, outputs_cls = model(batch_data, batch_labels)
+                    outputs_cls = outputs_cls[:,2,:]
+                    loss_cls = (1-alpha)*criterion(outputs_cls,batch_label)
+                    loss_aux = alpha*criterion(outputs, batch_label)
+                    loss = loss_cls + loss_aux
                 elif mode == 'justaux':
-                    outputs = model(batch_data).to(device)
+                    outputs = model(batch_data)
                     loss = criterion(outputs, batch_label)                
                 else:
                     batch_data = batch_data[:,2,:,:]
-                    outputs, _ = model(batch_data).to(device)
+                    outputs, _ = model(batch_data)
                     loss = criterion(outputs, batch_label)
 
                 valid_loss += loss.item()

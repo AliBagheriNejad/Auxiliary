@@ -388,8 +388,7 @@ def  fine_tune_aux(
         epochs = 100,
         early_stopping = 'val_loss',
         mode = 'aux',
-        alpha = 0.1,
-        check_weight = False
+        alpha = 0.1
 ):
 
     '''
@@ -427,9 +426,6 @@ def  fine_tune_aux(
         correct_train_cls = 0
         total_train = 0
         total_train_cls = 0
-
-        aux_dic_l = model.aux.state_dict()
-        cls_dic_l = model.cls.state_dict()
 
         progress_bar = tqdm.tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch + 1}/{epochs}')
 
@@ -574,24 +570,13 @@ def  fine_tune_aux(
             # save_weight_dic()
             break
 
-        aux_dic_c = model.aux.state_dict()
-        cls_dic_c = model.cls.state_dict()
-        
-        if check_weight:
-            cls_check = check_weights(cls_dic_c, cls_dic_l)
-            aux_check = check_weights(aux_dic_c, aux_dic_l)
-
-            print(f'Classifier weight are the same {cls_check}')
-            print(f'Auxiliary weight are the same {aux_check}')
     # if not do_break:
     #     save_weight_dic()
 
     # return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
 
 
-def check_weights(current, last):
 
-    for key in current:
-        if torch.equal(current[key], last[key]):
-            return True
-    return False
+
+
+

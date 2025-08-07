@@ -65,23 +65,26 @@ mlflow.log_param('data_shape', data.shape)
 # model = models.Auxilixary(26).to(device)
 # model = models.TransformerClassifier(input_dim=1050, d_model=1050*5, nhead=5, num_classes=26)
 model = models.Model2Trans(26).to(device)
-model.save_path = r'F:\thesis\Articles\2nd\code\temp\test_weight.pth'
+model.save_path = r'temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100
 model.e_ratio = 1000
 
 criterion = nn.CrossEntropyLoss()
+criterion_2 = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
-a = utils.fine_tune_aux(
+
+a = utils.train_classifier(
     model,
     criterion,
     optimizer,
     test_loader,
     test_loader,
-    epochs=1,
-    early_stopping='val_loss_cls',
+    epochs=10,
+    early_stopping='val_loss',
     alpha = 0.5,
-    mode = 'aux'
+    mode = 'auxt',
+    criterion_cls=criterion_2
 )
 
 
@@ -101,12 +104,12 @@ utils.save_cm(test_cm, list(label_map.keys()), split="Test")
 
 
 
-with open(r'F:\thesis\Articles\2nd\code\temp\train_cr.txt', 'w', encoding='utf-8') as f:
+with open(r'temp\train_cr.txt', 'w', encoding='utf-8') as f:
     f.write(train_cr)
-with open(r'F:\thesis\Articles\2nd\code\temp\test_cr.txt', 'w', encoding='utf-8') as f:
-    f.write(train_cr)
+with open(r'temp\test_cr.txt', 'w', encoding='utf-8') as f:
+    f.write(test_cr)
 
-mlflow.log_artifacts(r'F:\thesis\Articles\2nd\code\temp')
+mlflow.log_artifacts(r'temp')
 mlflow.end_run()
 
 

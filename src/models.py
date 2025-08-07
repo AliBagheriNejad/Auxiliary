@@ -481,11 +481,11 @@ class TransformerClassifier(nn.Module):
                 self.weight_dic[k] = self.state_dict()
 
 class Model2Trans(nn.Module):
-    def __init__(self,num_classes, in_channels=2, aux_feat=1089):
+    def __init__(self,num_classes, in_channels=2, aux_feat=1088+26, nh=1):
         super().__init__()
         self.cls = Network(num_classes,in_channels)
         self.calc_feat_dim(num_classes)
-        self.aux = TransformerClassifier(input_dim=1088+26, d_model=(1088+26)*1, nhead=1, num_classes=26)
+        self.aux = TransformerClassifier(input_dim=aux_feat, d_model=aux_feat*nh, nhead=nh, num_classes=26)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
         self.best_acc = 0

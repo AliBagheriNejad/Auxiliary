@@ -64,7 +64,7 @@ mlflow.log_param('data_shape', data.shape)
 # model = models.Network(26).to(device)
 # model = models.Auxilixary(26).to(device)
 # model = models.TransformerClassifier(input_dim=1050, d_model=1050*5, nhead=5, num_classes=26)
-model = models.Model2Trans(26).to(device)
+model = models.Model2Trans(26, mean=False).to(device)
 model.save_path = r'temp\test_weight.pth'
 model.patience = 50
 model.best_acc = -100

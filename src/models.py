@@ -391,7 +391,7 @@ class PositionalEncoding(nn.Module):
 
 # Transformer Classifier Model
 class TransformerClassifier(nn.Module):
-    def __init__(self, input_dim=100, d_model=100, nhead=4, num_layers=2, dim_feedforward=512, num_classes=2):
+    def __init__(self, input_dim=100, d_model=100, nhead=4, num_layers=2, dim_feedforward=512, num_classes=2, mean=True):
         super(TransformerClassifier, self).__init__()
         self.d_model = d_model
         # Project input features to d_model if needed
@@ -406,6 +406,8 @@ class TransformerClassifier(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.classifier = nn.Linear(d_model, num_classes)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
+
+        self.mean = mean
 
         self.best_acc = 0
         self.save_path = 'model_weights.pth'
@@ -436,7 +438,10 @@ class TransformerClassifier(nn.Module):
         x = self.pos_encoder(x)  # Add positional encoding
         x = self.transformer_encoder(x)  # (batch_size, seq_len, d_model)
         # Pooling: take mean across sequence dimension
-        x = x.mean(dim=1)  # (batch_size, d_model)
+        if self.mean:
+            x = x.mean(dim=1)  # (batch_size, d_model)
+        else :    
+            x = x[:,2,:]  # (batch_size, d_model)
         logits = self.classifier(x)  # (batch_size, num_classes)
 
         return F.softmax(logits,dim=1)
@@ -481,11 +486,11 @@ class TransformerClassifier(nn.Module):
                 self.weight_dic[k] = self.state_dict()
 
 class Model2Trans(nn.Module):
-    def __init__(self,num_classes, in_channels=2, aux_feat=1088+26, nh=1):
+    def __init__(self,num_classes, in_channels=2, aux_feat=1088+26,d_dim=124, nh=1, n_layer=2, mean=True):
         super().__init__()
         self.cls = Network(num_classes,in_channels)
         self.calc_feat_dim(num_classes)
-        self.aux = TransformerClassifier(input_dim=aux_feat, d_model=aux_feat*nh, nhead=nh, num_classes=26)
+        self.aux = TransformerClassifier(input_dim=aux_feat, d_model=d_dim*nh, nhead=nh, num_classes=26, num_layers=n_layer, mean=mean)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
         self.best_acc = 0

@@ -404,7 +404,10 @@ class TransformerClassifier(nn.Module):
             batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.classifier = nn.Linear(d_model, num_classes)
+        if self.mean == 'flatten':
+            self.classifier = nn.Linaer(d_model*nhead, num_classes)
+        else:
+            self.classifier = nn.Linear(d_model, num_classes)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
         self.mean = mean
@@ -438,8 +441,10 @@ class TransformerClassifier(nn.Module):
         x = self.pos_encoder(x)  # Add positional encoding
         x = self.transformer_encoder(x)  # (batch_size, seq_len, d_model)
         # Pooling: take mean across sequence dimension
-        if self.mean:
+        if self.mean == 'True':
             x = x.mean(dim=1)  # (batch_size, d_model)
+        elif self.mean == 'flatten':
+            x = x.reshape(x.shape[0], -1)
         else :    
             x = x[:,2,:]  # (batch_size, d_model)
         logits = self.classifier(x)  # (batch_size, num_classes)

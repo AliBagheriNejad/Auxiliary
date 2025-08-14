@@ -404,13 +404,13 @@ class TransformerClassifier(nn.Module):
             batch_first=True
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.mean = mean
         if self.mean == 'flatten':
             self.classifier = nn.Linaer(d_model*nhead, num_classes)
         else:
             self.classifier = nn.Linear(d_model, num_classes)
         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
 
-        self.mean = mean
 
         self.best_acc = 0
         self.save_path = 'model_weights.pth'

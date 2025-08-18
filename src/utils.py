@@ -88,7 +88,8 @@ def  train_classifier(
         early_stopping = 'val_loss',
         mode = 'aux',
         alpha = 0.1,
-        criterion_cls=None
+        criterion_cls=None,
+        show_grad = False
 ):
 
     '''
@@ -183,6 +184,11 @@ train_acc_cls={100 * correct_train_cls / total_train_cls:.4f}')
             train_acc_log_cls = 100 * correct_train_cls / total_train_cls
             train_losses_cls.append(train_loss_log_cls)
             train_accs_cls.append(train_acc_log_cls)
+        
+        if show_grad:
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    print(f"{name}: {param.grad.mean().item():.10f}")
 
         # Validation
         model.eval()

@@ -84,7 +84,8 @@ a = utils.train_classifier(
     early_stopping='val_loss',
     alpha = 0.5,
     mode = 'auxt',
-    criterion_cls=criterion_2
+    criterion_cls=criterion_2,
+    show_grad=True
 )
 
 

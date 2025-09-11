@@ -458,7 +458,7 @@ def pred_mat(X, y, y_hat, names):
     
     return pred_dic
 
-def  fine_tune_aux(
+def  train_aux(
         model,
         criterion,
         optimizer,
@@ -467,7 +467,12 @@ def  fine_tune_aux(
         epochs = 100,
         early_stopping = 'val_loss',
         mode = 'aux',
-        alpha = 0.1
+        alpha = 0.1,
+        criterion_cls = None,
+        criterion_cls_2 = None,
+        optimizer_cls = None,
+        optimizer_cls_2 = None,
+        show_grad = False
 ):
 
     '''
@@ -494,16 +499,15 @@ def  fine_tune_aux(
     fix_temp()
     # Training loop (example, not complete)
     train_losses, train_accs, valid_losses, valid_accs = [], [], [], []
-    train_accs_cls, train_losses_cls = [], []
-    valid_accs_cls, valid_losses_cls = [], []
+    train_losses_cls, train_accs_cls, valid_losses_cls, valid_accs_cls = [], [], [], []
 
     for epoch in range(epochs):
         model.train()
         train_loss = 0.0
-        train_loss_cls = 0.0
         correct_train = 0
-        correct_train_cls = 0
         total_train = 0
+        train_loss_cls = 0.0
+        correct_train_cls = 0
         total_train_cls = 0
 
         progress_bar = tqdm.tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc=f'Epoch {epoch + 1}/{epochs}')
@@ -511,117 +515,154 @@ def  fine_tune_aux(
         for i, (batch_data, batch_labels) in progress_bar:
             batch_data = batch_data.to(device)
             batch_labels = batch_labels.to(device)
-            batch_label = batch_labels[:,2]
+            batch_label = batch_labels[:,2].clone()
             optimizer.zero_grad()
+            optimizer_cls.zero_grad()
 
-            if mode == 'aux':
-                outputs, outputs_cls = model(batch_data, batch_labels)
-                outputs_cls = outputs_cls[:,2,:]
-                loss_cls = (1-alpha)*criterion(outputs_cls,batch_label)
-                loss_aux = alpha*criterion(outputs, batch_label)
-                loss = loss_cls + loss_aux
-            elif mode == 'justaux':
-                outputs = model(batch_data).to(device)
-                loss = criterion(outputs, batch_label)
-            else:
-                batch_data = batch_data[:,2,:,:]
-                outputs,_ = model(batch_data).to(device)
-                loss = criterion(outputs, batch_label)
-            loss.backward()
+            # if mode == 'aux':
+            #     outputs, outputs_cls = model(batch_data, batch_labels)
+            #     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_label)
+            # elif mode == 'auxt':
+            #     outputs, outputs_cls = model(batch_data, batch_labels)
+            #     loss_cls = criterion_cls(outputs_cls[:,2,:],batch_label)
+            #     loss_aux = criterion(outputs, batch_label)
+            #     # loss = (1-alpha)*criterion(outputs_cls[:,2,:],batch_label) + alpha*criterion(outputs, batch_label)
+            #     loss = (1-alpha)*loss_cls + alpha*criterion(outputs, batch_label)
+            #     # loss = (1-alpha)*loss_cls + alpha*loss_aux
+            # elif mode == 'justaux':
+            #     outputs = model(batch_data)
+            #     loss = criterion(outputs, batch_label)
+            # else:
+            #     batch_data = batch_data[:,2,:,:]
+            #     outputs,_ = model(batch_data)
+            #     loss = criterion(outputs, batch_label)
+
+            outputs, outputs_cls = model(batch_data, batch_labels)
+            
+            loss_aux = alpha * criterion(outputs, batch_label)
+            # loss_cls_2 = criterion_cls_2(outputs_cls,)            
+            
+            loss_aux.backward(retain_graph=True)
             optimizer.step()
 
-            if mode == 'aux':
-                train_loss = loss.item()
-                train_loss_cls = loss_cls.item()
-            else:
-                train_loss += loss.item()
+            # output = outputs_cls[:,2,:].clone()
+            loss_cls = (1-alpha) * criterion_cls(outputs_cls[:,2,:],batch_labels[:,2])
+            loss_cls.backward()
+            optimizer_cls.step()
 
+            train_loss += loss_aux.item()
             _, predicted = torch.max(outputs, 1)
             total_train += batch_labels.size(0)
             correct_train += (predicted == batch_label).sum().item()
-
-            _, predicted_cls = torch.max(outputs_cls, 1)
+            # if mode == 'auxt':
+            train_loss_cls += loss_cls.item()
+            _, predicted_cls = torch.max(outputs_cls[:,2,:], 1)
             total_train_cls += batch_labels.size(0)
             correct_train_cls += (predicted_cls == batch_label).sum().item()
 
-            progress_bar.set_postfix(train_acc_cls = 100*correct_train_cls/total_train, train_acc=100 * correct_train / total_train,train_loss_cls=train_loss_cls/(i+1), train_loss=train_loss / (i + 1))
+            # progress_bar.set_postfix(train_loss=train_loss / (i + 1), train_acc=100 * correct_train / total_train)
+            try:
+                progress_bar.set_postfix_str(f'train_loss={train_loss / (i + 1):.4f},\
+train_loss_cls={train_loss_cls / (i + 1):.4f}, \
+train_acc={100 * correct_train / total_train:.4f}, \
+train_acc_cls={100 * correct_train_cls / total_train_cls:.4f}')
+                
+            except:
+                progress_bar.set_postfix_str(f'train_loss={train_loss / (i + 1):.4f}, train_acc={100 * correct_train / total_train:.4f}')
         
         train_loss_log = train_loss / len(train_dataloader)
-        train_loss_cls_log = train_loss_cls/len(train_dataloader)
-
         train_acc_log = 100 * correct_train / total_train
-        train_acc_cls_log = 100 * correct_train_cls / total_train
-
         train_losses.append(train_loss_log)
-        train_losses_cls.append(train_loss_cls_log)
         train_accs.append(train_acc_log)
-        train_accs_cls.append(train_acc_cls_log)
+        if mode == 'auxt':
+            train_loss_log_cls = train_loss_cls / len(train_dataloader)
+            train_acc_log_cls = 100 * correct_train_cls / total_train_cls
+            train_losses_cls.append(train_loss_log_cls)
+            train_accs_cls.append(train_acc_log_cls)
+        
+        if show_grad:
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    print(f"{name}: {param.grad.mean().item():.10f}")
 
         # Validation
         model.eval()
-        valid_loss = 0.0
-        valid_loss_cls = 0.0
-        total_valid = 0
-        total_valid_cls = 0
-        correct_valid = 0
-        correct_valid_cls = 0
+        val_loss = 0.0
+        correct_val = 0
+        total_val = 0
+        val_loss_cls = 0.0
+        correct_val_cls = 0
+        total_val_cls = 0
 
         with torch.no_grad():
             for batch_data, batch_labels in val_dataloader:
                 batch_data = batch_data.to(device)
                 batch_labels = batch_labels.to(device)
                 batch_label = batch_labels[:,2]
-                if mode == 'aux':
-                    outputs, outputs_cls = model(batch_data, batch_labels)
-                    outputs_cls = outputs_cls[:,2,:]
-                    loss_cls = (1-alpha)*criterion(outputs_cls,batch_label)
-                    loss_aux = alpha*criterion(outputs, batch_label)
-                    loss = loss_cls + loss_aux
-                elif mode == 'justaux':
-                    outputs = model(batch_data).to(device)
-                    loss = criterion(outputs, batch_label)                
-                else:
-                    batch_data = batch_data[:,2,:,:]
-                    outputs, _ = model(batch_data).to(device)
-                    loss = criterion(outputs, batch_label)
-
-                if mode == 'aux':
-                    valid_loss = loss.item()
-                    valid_loss_cls = loss_cls.item()
-                else:
-                    valid_loss += loss.item()
+                # if mode == 'aux':
+                #     outputs, outputs_cls = model(batch_data, batch_labels)
+                #     loss = (1-alpha)*criterion(outputs_cls,batch_label) + alpha*criterion(outputs, batch_labels)
+                # elif mode == 'auxt':
+                #     outputs, outputs_cls = model(batch_data, batch_labels)
+                #     loss_cls = criterion_cls(outputs_cls[:,2,:],batch_label)
+                #     loss_aux = criterion(outputs, batch_label)
+                #     # loss = (1-alpha)*criterion(outputs_cls[:,2,:],batch_label) + alpha*criterion(outputs, batch_label)
+                #     loss = (1-alpha)*loss_cls + alpha*criterion(outputs, batch_label)
+                #     # loss = (1-alpha)*loss_cls + alpha*loss_aux
+                # elif mode == 'justaux':
+                #     outputs = model(batch_data)
+                #     loss = criterion(outputs, batch_label)                
+                # else:
+                #     batch_data = batch_data[:,2,:,:]
+                #     outputs, _ = model(batch_data)
+                #     loss = criterion(outputs, batch_label)
+                outputs, outputs_cls = model(batch_data, batch_labels)
                 
+                loss_aux = alpha * criterion(outputs, batch_label)
+                loss_cls = (1-alpha) * criterion_cls(outputs_cls[:,2,:],batch_label)
 
+                val_loss += loss_aux.item()
                 _, predicted = torch.max(outputs, 1)
-                total_valid += batch_labels.size(0)
-                correct_valid += (predicted == batch_label).sum().item()
+                total_val += batch_labels.size(0)
+                correct_val += (predicted == batch_label).sum().item()
+                # if mode == 'auxt':
+                val_loss_cls += loss_cls.item()
+                _, predicted_cls = torch.max(outputs_cls[:,2,:], 1)
+                total_val_cls += batch_labels.size(0)
+                correct_val_cls += (predicted_cls == batch_label).sum().item()
 
-                _, predicted_cls = torch.max(outputs_cls, 1)
-                total_valid_cls += batch_labels.size(0)
-                correct_valid_cls += (predicted_cls == batch_label).sum().item()
-
-        val_loss_log = valid_loss / len(val_dataloader)
-        val_loss_cls_log = valid_loss_cls / len(val_dataloader)
-        val_acc_log = 100 * correct_valid / total_valid
-        val_acc_cls_log = 100 * correct_valid_cls / total_valid
-
+        val_loss_log = val_loss / len(val_dataloader)
+        val_acc_log = 100 * correct_val / total_val
         valid_losses.append(val_loss_log)
-        valid_losses_cls.append(val_loss_cls_log)
         valid_accs.append(val_acc_log)
-        valid_accs_cls.append(val_acc_cls_log)
-        print(f'validation_acc: {valid_accs[-1]:.1f}, validation_acc_cls: {valid_accs_cls[-1]:.1f}, validation_loss: {valid_losses[-1]:.4f}, validation_loss_cls: {valid_losses_cls[-1]:.4f}', end='\n')
+        if mode == 'auxt':
+            val_loss_log_cls = val_loss_cls / len(val_dataloader)
+            val_acc_log_cls = 100 * correct_val_cls / total_val_cls
+            valid_losses_cls.append(val_loss_log_cls)
+            valid_accs_cls.append(val_acc_log_cls)
+        try:
+            print(f'val_loss: {valid_losses[-1]:.4f}, val_loss_cls: {valid_losses_cls[-1]:.4f}, val_acc: {valid_accs[-1]:.1f}, val_acc_cls: {valid_accs_cls[-1]:.1f}', end='\n')
+        except:
+            print(f'val_loss: {valid_losses[-1]:.4f}, val_acc: {valid_accs[-1]:.1f}', end='\n')
 
-
-        model.metrics_now = {
-            'train_loss': -train_loss_log,
-            'train_loss_cls': -train_loss_cls_log,
-            'train_acc': train_acc_log,
-            'train_acc_cls': train_acc_cls_log,
-            'val_acc': val_acc_log,
-            'val_acc_cls': val_acc_cls_log,
-            'val_loss': -val_loss_log,
-            'val_loss_cls': -val_loss_cls_log
-        }
+        if mode == 'auxt':
+            model.metrics_now = {
+                'train_loss': -train_loss_log,
+                'train_acc': train_acc_log,
+                'val_acc': val_acc_log,
+                'val_loss': -val_loss_log,
+                'train_loss_cls': -train_loss_log_cls,
+                'train_acc_cls': train_acc_log_cls,
+                'val_acc_cls': val_acc_log_cls,
+                'val_loss_cls': -val_loss_log_cls,
+            }
+        else:
+            model.metrics_now = {
+                'train_loss': -train_loss_log,
+                'train_acc': train_acc_log,
+                'val_acc': val_acc_log,
+                'val_loss': -val_loss_log,
+            }
         # for k in model.metrics_now.keys():
         mlflow.log_metrics(model.metrics_now, synchronous=True, step=epoch+1)
         # mlflow.log_metric('train acc', model.metrics_now['train_acc'])
@@ -630,18 +671,18 @@ def  fine_tune_aux(
         # Early stopping
         if early_stopping == 'val_acc':
             do_break = model.early_stopping(valid_accs[-1],epoch)
-        elif early_stopping == 'val_acc_cls':
-            do_break = model.early_stopping(valid_accs_cls[-1],epoch)
         elif early_stopping == 'val_loss':
             do_break = model.early_stopping(-valid_losses[-1],epoch)
-        elif early_stopping == 'val_loss_cls':
-            do_break = model.early_stopping(-valid_losses_cls[-1],epoch)
         elif early_stopping == 'train_acc':
             do_break = model.early_stopping(train_accs[-1],epoch)
-        elif early_stopping == 'train_acc_cls':
-            do_break = model.early_stopping(train_accs_cls[-1],epoch)
         elif early_stopping == 'train_loss':
             do_break = model.early_stopping(-train_losses[-1],epoch)
+        elif early_stopping == 'val_acc_cls':
+            do_break = model.early_stopping(valid_accs_cls[-1],epoch)
+        elif early_stopping == 'val_loss_cls':
+            do_break = model.early_stopping(-valid_losses_cls[-1],epoch)
+        elif early_stopping == 'train_acc_cls':
+            do_break = model.early_stopping(train_accs_cls[-1],epoch)
         elif early_stopping == 'train_loss_cls':
             do_break = model.early_stopping(-train_losses_cls[-1],epoch)
 
@@ -649,11 +690,11 @@ def  fine_tune_aux(
             # save_weight_dic()
             break
 
-    # if not do_break:
-    #     save_weight_dic()
+    if not do_break:
+        # save_weight_dic()
+        pass
 
-    # return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
-
+    return {'train_loss':train_losses, 'train_acc': train_accs, 'val_loss':valid_losses, 'val_acc':valid_accs}
 
 
 

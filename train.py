@@ -6,6 +6,7 @@ from torch import device as ddevice
 from torch.cuda import is_available
 import torch.nn as nn
 import torch.optim as optim
+from torch.autograd import set_detect_anomaly
 
 import src.utils as utils
 import src.models as models
@@ -73,8 +74,10 @@ model.e_ratio = 1000
 criterion = nn.CrossEntropyLoss()
 criterion_2 = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer_cls = optim.Adam(model.cls.parameters(), lr=0.001)
 
-a = utils.train_classifier(
+set_detect_anomaly(True)
+a = utils.train_aux(
     model,
     criterion,
     optimizer,
@@ -85,7 +88,8 @@ a = utils.train_classifier(
     alpha = 0.5,
     mode = 'auxt',
     criterion_cls=criterion_2,
-    show_grad=True
+    optimizer_cls=optimizer_cls,
+    show_grad=False
 )
 
 

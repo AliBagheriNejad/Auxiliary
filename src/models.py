@@ -611,3 +611,342 @@ class Model2Trans(nn.Module):
                 self.metrics_best[k] = self.metrics_now[k]
                 self.weight_dic[k] = self.state_dict()
 
+# class AGAN(nn.Module):
+#     def __init__(
+#             self,
+#             num_classes, 
+#             in_channels=2, 
+#             aux_feat=1088+26, 
+#             fe=None, 
+#             aux=None, 
+#             cls=None, 
+#             disc=None, 
+#             y_in_feat=False):
+#         super().__init__()
+        
+#         self.fe = fe
+#         self.aux = aux
+#         self.c = cls
+#         self.d = disc
+
+#         self.include_y = y_in_feat
+#         self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
+
+#         self.best_acc = -100
+#         self.save_path = 'model_weights.pth'
+#         self.patience = 10
+#         self.e_ratio = 100
+#         self.in_ch = in_channels
+#         self.weight_dic = {
+#             'train_loss':None,
+#             'train_acc': None,
+#             'val_acc': None,
+#             'val_loss': None
+#         }
+#         self.metrics_now = {
+#             'train_loss':None,
+#             'train_loss_cls':None,
+#             'train_acc': None,
+#             'train_acc_cls':None,
+#             'val_acc': None,
+#             'val_acc_cls':None,
+#             'val_loss': None,
+#             'val_loss_cls':None
+#         }
+#         self.metrics_best = {
+#             'train_loss':-np.inf,
+#             'train_loss_cls':-np.inf,
+#             'train_acc': 0,
+#             'train_acc_cls': 0,
+#             'val_acc': 0,
+#             'val_acc_cls': 0,
+#             'val_loss': -np.inf,
+#             'val_loss_cls': -np.inf
+#         }
+
+#     def forward(self,x,y):
+
+#         self.train()
+#         if self.fe:
+#             # self.fe.train()
+#             x_i = x[:,2,:,:]
+#             x_fe = self.fe(x_i)
+#             z_aux = self.calc_z(x,y)
+#         else :
+#             z_aux = x.flatten(1,2)
+#         self.train()
+#         x_aux = self.aux(z_aux)
+
+#         x_cls,_ = self.c(x_aux)
+        
+#         return F.softmax(x_cls, dim=1)
+    
+#     def calc_z(self, x, y):
+#         with torch.no_grad():
+#             x_fe = x.reshape(x.shape[0]*x.shape[1], x.shape[2], x.shape[3])
+#             x_fe = self.fe(x_fe)
+#             x = x_fe.reshape(x.shape[0], x.shape[1], -1)
+#             if self.include_y:
+#                 y_one_hot = self.label_coder(y)
+#                 x = torch.concat([y_one_hot,x], dim=2)
+#             return x.flatten(1,2)
+
+
+#     def concat_embd(self, x, embed):
+
+#         if len(x.shape)==2:
+#             x = x.unsqueeze(1)
+#             embed = embed.unsqueeze(1)
+#         _, y_hat = torch.max(x, 2)
+#         y_hat_ohe = self.label_coder(y_hat)
+#         # y_hat_ohe = y_hat_ohe.reshape(-1,1)
+#         if len(x.shape)==3:
+#             embedding = torch.concat([y_hat_ohe, embed], dim=2)
+#         if len(x.shape)==2:
+#             embedding = torch.concat([y_hat_ohe, embed], dim=2)
+
+#         return embedding
+
+#     def calc_feat_dim(self, n, n_sample=5):
+#         x = torch.randn(1,1024,2)
+#         _, embed = self.cls(x)
+#         dim = (embed.shape[1] + n) * n_sample
+#         self.aux_dim = dim
+
+    
+#     def early_stopping(self,thing,epoch):
+
+#         '''
+#         Incase you wanted to use best loss
+#         just use "-loss"
+
+#         '''
+#         self.check_weight()
+#         # Early stopping
+#         if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
+#         # if thing > self.best_acc :
+
+
+#             self.best_acc = thing
+#             self.best_epoch = epoch
+#             self.current_patience = 0
+
+#             # Save the model's weights
+#             torch.save(self.state_dict(), self.save_path)
+#             print("<<<<<<<  !Model saved!  >>>>>>>")
+#             return False
+#         else:
+#             self.current_patience += 1
+#             # Check if the patience limit is reached
+#             if self.current_patience >= self.patience:
+#                 print("Early stopping triggered!")
+#                 return True
+#             else:
+#                 return False
+    
+#     def check_weight(self):
+
+#         for k in self.weight_dic.keys():
+
+#             if  (self.metrics_now[k] > self.metrics_best[k]):
+#                 # print(f'Replacing weight for best \'{k}\'')
+#                 self.metrics_best[k] = self.metrics_now[k]
+#                 self.weight_dic[k] = self.state_dict()
+
+# class AuxNet(nn.Module):
+
+#     def __init__(
+#             self,
+#             n_layer = 4,
+#             in_dim = 1024*5,
+#             out_dim = 1024
+#     ):
+#         super().__init__()
+#         layers = []
+#         hidden_size = int((in_dim+out_dim)/2)
+#         # Input layer
+#         layers.append(nn.Linear(in_dim, hidden_size))
+#         layers.append(nn.ReLU())
+        
+#         # Hidden layers
+#         for _ in range(n_layer - 2):
+#             layers.append(nn.Linear(hidden_size, hidden_size))
+#             layers.append(nn.ReLU())
+        
+#         # Output layer
+#         layers.append(nn.Linear(hidden_size, out_dim))
+        
+#         self.model = nn.Sequential(*layers)
+
+#     def forward(self, x):
+#         return self.model(x)
+
+class AGAN(nn.Module):
+    def __init__(
+            self,
+            num_classes, 
+            in_channels=2, 
+            aux_feat=1088+26, 
+            fe=None, 
+            aux=None, 
+            cls=None, 
+            disc=None, 
+            y_in_feat=False):
+        super().__init__()
+        
+        self.fe = fe
+        self.aux = aux
+        self.c = cls
+        self.d = disc
+
+        self.include_y = y_in_feat
+        self.label_coder = lambda y:F.one_hot(y, num_classes=num_classes)
+
+        self.best_acc = -100
+        self.save_path = 'model_weights.pth'
+        self.patience = 10
+        self.e_ratio = 100
+        self.in_ch = in_channels
+        self.weight_dic = {
+            'train_loss':None,
+            'train_acc': None,
+            'val_acc': None,
+            'val_loss': None
+        }
+        self.metrics_now = {
+            'train_loss':None,
+            'train_loss_cls':None,
+            'train_acc': None,
+            'train_acc_cls':None,
+            'val_acc': None,
+            'val_acc_cls':None,
+            'val_loss': None,
+            'val_loss_cls':None
+        }
+        self.metrics_best = {
+            'train_loss':-np.inf,
+            'train_loss_cls':-np.inf,
+            'train_acc': 0,
+            'train_acc_cls': 0,
+            'val_acc': 0,
+            'val_acc_cls': 0,
+            'val_loss': -np.inf,
+            'val_loss_cls': -np.inf
+        }
+
+    def forward(self,x,y):
+
+        self.train()
+        if self.fe:
+            # self.fe.train()
+            x_i = x[:,2,:,:]
+            x_fe = self.fe(x_i)
+            z_aux = self.calc_z(x,y)
+        else :
+            z_aux = x.flatten(1,2)
+        self.train()
+        x_aux = self.aux(z_aux)
+
+        x_cls,_ = self.c(x_aux)
+        
+        return F.softmax(x_cls, dim=1)
+    
+    def calc_z(self, x, y):
+        with torch.no_grad():
+            x_fe = x.reshape(x.shape[0]*x.shape[1], x.shape[2], x.shape[3])
+            x_fe = self.fe(x_fe)
+            x = x_fe.reshape(x.shape[0], x.shape[1], -1)
+            if self.include_y:
+                y_one_hot = self.label_coder(y)
+                x = torch.concat([y_one_hot,x], dim=2)
+            return x.flatten(1,2)
+
+
+    def concat_embd(self, x, embed):
+
+        if len(x.shape)==2:
+            x = x.unsqueeze(1)
+            embed = embed.unsqueeze(1)
+        _, y_hat = torch.max(x, 2)
+        y_hat_ohe = self.label_coder(y_hat)
+        # y_hat_ohe = y_hat_ohe.reshape(-1,1)
+        if len(x.shape)==3:
+            embedding = torch.concat([y_hat_ohe, embed], dim=2)
+        if len(x.shape)==2:
+            embedding = torch.concat([y_hat_ohe, embed], dim=2)
+
+        return embedding
+
+    def calc_feat_dim(self, n, n_sample=5):
+        x = torch.randn(1,1024,2)
+        _, embed = self.cls(x)
+        dim = (embed.shape[1] + n) * n_sample
+        self.aux_dim = dim
+
+    
+    def early_stopping(self,thing,epoch):
+
+        '''
+        Incase you wanted to use best loss
+        just use "-loss"
+
+        '''
+        self.check_weight()
+        # Early stopping
+        if (thing > self.best_acc) and (np.abs(thing-self.best_acc) > np.abs(self.best_acc)/self.e_ratio):
+        # if thing > self.best_acc :
+
+
+            self.best_acc = thing
+            self.best_epoch = epoch
+            self.current_patience = 0
+
+            # Save the model's weights
+            torch.save(self.state_dict(), self.save_path)
+            print("<<<<<<<  !Model saved!  >>>>>>>")
+            return False
+        else:
+            self.current_patience += 1
+            # Check if the patience limit is reached
+            if self.current_patience >= self.patience:
+                print("Early stopping triggered!")
+                return True
+            else:
+                return False
+    
+    def check_weight(self):
+
+        for k in self.weight_dic.keys():
+
+            if  (self.metrics_now[k] > self.metrics_best[k]):
+                # print(f'Replacing weight for best \'{k}\'')
+                self.metrics_best[k] = self.metrics_now[k]
+                self.weight_dic[k] = self.state_dict()
+
+class AuxNet(nn.Module):
+
+    def __init__(
+            self,
+            n_layer = 4,
+            in_dim = 1024*5,
+            out_dim = 1024
+    ):
+        super().__init__()
+        layers = []
+        hidden_size = int((in_dim+out_dim)/2)
+        # Input layer
+        layers.append(nn.Linear(in_dim, hidden_size))
+        layers.append(nn.ReLU())
+        
+        # Hidden layers
+        for _ in range(n_layer - 2):
+            layers.append(nn.Linear(hidden_size, hidden_size))
+            layers.append(nn.ReLU())
+        
+        # Output layer
+        layers.append(nn.Linear(hidden_size, out_dim))
+        
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)

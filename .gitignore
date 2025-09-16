@@ -8,6 +8,8 @@ code4transform.py
 /mlruns/506179240433026533/*
 /mlruns/623922822895938578/*
 /mlruns/812722529434452745/*
+*.pth
+*.pt
 =======
 DynamicPruning.ipynb
 /Data/*

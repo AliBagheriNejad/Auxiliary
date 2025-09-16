@@ -18,7 +18,7 @@ import src.models as models
 
 
 device = ddevice("cuda" if is_available() else "cpu")
-data_dir = r'F:\thesis\Articles\2nd\code\Data'
+data_dir = r'F:\thesis\Articles\2nd\cod\Data'
 file_name = 'input.pkl'
 file_name_label = 'output.pkl'
 file_path = os.path.join(data_dir, file_name)
@@ -53,23 +53,20 @@ test_loader = utils.make_loader(X_test_scaled_tensor,y_test_tensor, 128)
 
 weight_dir = r'F:\thesis\Articles\2nd\mlruns\994478961421787748\5945e3b605184dd4866fcccf6edc6ace\artifacts'
 weight_dir = os.path.join(weight_dir,'test_weight.pth')
-classifier = utils.load_model(models.Network(26), weight_dir)
+network = utils.load_model(models.Network(26), weight_dir)
 
-model = models.AGAN(
-    26, 
-    aux_feat=1024*5,
-    fe = None,
-    cls = classifier.classifier,
-    aux = models.AuxNet()
-)
+feature_extractor = network.feature_extractor
+classifier = network.classifier
+auxilliary = models.AuxNet(n_layer=1, in_dim=1024*5, out_dim=1024)
 
 ## Training
 # ===============================================================
 MODE = 'aux_gan'
+MODEL = auxilliary
 EPOCHS = 10
 TRAIN_DATALOADER = test_loader
 TEST_DATALOADER = test_loader
-OPTIMIZER = optim.Adam(model.aux.parameters(), lr=0.00001)
+OPTIMIZER = optim.Adam(auxilliary.parameters(), lr=0.00001)
 CRITERION = nn.CrossEntropyLoss()
 EARLY_STOPPING = 'test_loss'
 SHOW_GRAD = True
@@ -85,8 +82,8 @@ def fix_temp():
                 os.remove(file_path)
 
 def save_weight_dic():
-        for k,v in zip(model.weight_dic.keys(), model.weight_dic.values()):
-            weight_name = f'{MODE}_{k}_{np.abs(model.metrics_best[k]):.6f}.pth'
+        for k,v in zip(MODEL.weight_dic.keys(), MODEL.weight_dic.values()):
+            weight_name = f'{MODE}_{k}_{np.abs(MODEL.metrics_best[k]):.6f}.pth'
             weight_path = os.path.join('temp', weight_name)
             torch.save(v, weight_path)
             print(f'Weight <{weight_path}> saved successfully')
@@ -96,7 +93,7 @@ fix_temp()
 train_losses, train_accs, test_losses, test_accs = [], [], [], []
     
 for epoch in range(EPOCHS):
-    model.train()
+    MODEL.train()
     train_loss = 0.0
     correct_train = 0
     total_train = 0
@@ -111,7 +108,18 @@ for epoch in range(EPOCHS):
         
         OPTIMIZER.zero_grad()
 
-        outputs = model(batch_data, batch_labels)
+        # Extract V
+        # with torch.no_grad():
+        #     x_fe = batch_data.reshape(batch_data.shape[0]*batch_data.shape[1], batch_data.shape[2], batch_data.shape[3])
+        #     x_fe = feature_extractor(x_fe)
+        #     x = x_fe.reshape(batch_data.shape[0], batch_data.shape[1], -1)
+        #     if MODEL.include_y:
+        #         y_one_hot = MODEL.label_coder(batch_label)
+        #         x = torch.concat([y_one_hot,x], dim=2)
+        #     batch_data = x.flatten(1,2)
+        batch_data = batch_data.flatten(1,2)
+        features = MODEL(batch_data)
+        outputs = classifier(features)
         loss = CRITERION(outputs, batch_label)
 
         loss.backward()
@@ -132,7 +140,7 @@ for epoch in range(EPOCHS):
     train_losses.append(train_loss_log)
     train_accs.append(train_acc_log)
 
-    model.eval()
+    MODEL.eval()
     test_loss = 0.0
     correct_test = 0
     total_test = 0
@@ -142,8 +150,10 @@ for epoch in range(EPOCHS):
             batch_data = batch_data.to(device)
             batch_labels = batch_labels.to(device)
             batch_label = batch_labels[:,2]
-
-        outputs = model(batch_data, batch_labels)
+            
+        batch_data = batch_data.flatten(1,2)
+        features = MODEL(batch_data)
+        outputs = classifier(features)
         loss = CRITERION(outputs, batch_label)
 
 
@@ -164,7 +174,7 @@ for epoch in range(EPOCHS):
 
     print(f'val_loss: {test_losses[-1]:.4f}, val_acc: {test_accs[-1]:.1f}', end='\n')
 
-    model.metrics_now = {
+    MODEL.metrics_now = {
                 'train_loss': -train_loss_log,
                 'train_acc': train_acc_log,
                 'val_acc': test_acc_log,
@@ -172,18 +182,18 @@ for epoch in range(EPOCHS):
             }
 
     if SHOW_GRAD:
-        for name, param in model.named_parameters():
+        for name, param in MODEL.named_parameters():
             if param.grad is not None:
                 print(f"{name}: {param.grad.mean().item():.10f}")
 
     if EARLY_STOPPING == 'test_acc':
-            do_break = model.early_stopping(test_accs[-1],epoch)
+            do_break = MODEL.early_stopping(test_accs[-1],epoch)
     elif EARLY_STOPPING == 'test_loss':
-        do_break = model.early_stopping(-test_losses[-1],epoch)
+        do_break = MODEL.early_stopping(-test_losses[-1],epoch)
     elif EARLY_STOPPING == 'train_acc':
-        do_break = model.early_stopping(train_accs[-1],epoch)
+        do_break = MODEL.early_stopping(train_accs[-1],epoch)
     elif EARLY_STOPPING == 'train_loss':
-        do_break = model.early_stopping(-train_losses[-1],epoch)
+        do_break = MODEL.early_stopping(-train_losses[-1],epoch)
         
     if do_break:
         break

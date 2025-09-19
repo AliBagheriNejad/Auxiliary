@@ -45,10 +45,10 @@ class FeatureExtractor(nn.Module):
         return x
 
 class Classifier(nn.Module):
-    def __init__(self, num_classes, drop=0.2):
+    def __init__(self, num_classes, drop=0.2, in_dim = 1024):
         super(Classifier, self).__init__()
 
-        self.fc1 = nn.Linear(1024, 128)
+        self.fc1 = nn.Linear(in_dim, 128)
         self.dropout1 = nn.Dropout(drop)
 
         self.fc2 = nn.Linear(128, 64)

@@ -82,7 +82,9 @@ OPTIMIZER_G = optim.Adam(MODEL_G.parameters(), lr = 0.00001)
 CRITERION = nn.CrossEntropyLoss()
 EARLY_STOPPING = 'test_loss'
 SHOW_GRAD = False
-P_D = 3
+P_D = 1
+STD = 0.01
+MEAN = 10
 
 def fix_temp():
     temp_dir = 'temp'
@@ -101,6 +103,28 @@ def save_weight_dic():
             torch.save(v, weight_path)
             print(f'Weight <{weight_path}> saved successfully')
 
+def calc_features_d(batch_data, disc_label):
+    
+    x = calc_features_g(batch_data)
+    fake_features = x[:,2,:]
+    if MODEL_AUX.include_y:
+        y_one_hot = MODEL_AUX.label_coder(disc_label)
+        x = torch.concat([y_one_hot,x], dim=2)
+    batch_data = x.flatten(1,2)
+    real_features = MODEL_AUX(batch_data)
+
+    return real_features, fake_features
+
+def calc_features_g(batch_data):
+    x_fe = batch_data.reshape(batch_data.shape[0]*batch_data.shape[1], batch_data.shape[2], batch_data.shape[3])
+    x_fe = MODEL_G(x_fe)
+    x = x_fe.reshape(batch_data.shape[0], batch_data.shape[1], -1)
+    return x
+
+def add_gaussian_noise(tensor, std=0.05, mean = 2):
+    noise = torch.randn_like(tensor) * std + mean
+    return tensor + noise
+
 fix_temp()
 
 train_losses_d, train_accs_d, test_losses_d, test_accs_d = [], [], [], []
@@ -117,32 +141,30 @@ for epoch in range(EPOCHS):
     progress_bar = tqdm.tqdm(enumerate(TRAIN_DATALOADER), total=len(TRAIN_DATALOADER), desc=f'Epoch {epoch + 1}/{EPOCHS}')
 
     for i,(batch_data, batch_labels) in progress_bar:
-        MODEL_D.train()
         batch_data = batch_data.to(device)
         batch_data = batch_data.permute(0,1,3,2)
         batch_labels = batch_labels.to(device)
         batch_label = batch_labels[:,2].to(device)
 
-        real_label = torch.ones_like(batch_label)
-        fake_label = torch.zeros_like(batch_label)
-        disc_label = torch.concat([real_label,fake_label], dim=0)
-        
-        OPTIMIZER_D.zero_grad()
 
-        # Extract V
-        with torch.no_grad():
-            x_fe = batch_data.reshape(batch_data.shape[0]*batch_data.shape[1], batch_data.shape[2], batch_data.shape[3])
-            x_fe = MODEL_G(x_fe)
-            x = x_fe.reshape(batch_data.shape[0], batch_data.shape[1], -1)
-            fake_featuers = x[:,2,:]
-            if MODEL_AUX.include_y:
-                y_one_hot = MODEL_AUX.label_coder(disc_label)
-                x = torch.concat([y_one_hot,x], dim=2)
-            batch_data = x.flatten(1,2)
+        ###############
+        # Discriminator
+        ###############
         if epoch%P_D == 0:
-            real_features = MODEL_AUX(batch_data)
+            real_label = torch.ones_like(batch_label)
+            fake_label = torch.zeros_like(batch_label)
+            disc_label = torch.concat([real_label,fake_label], dim=0)
+            
+            MODEL_D.train()
+            
+            OPTIMIZER_D.zero_grad()
 
-            features = torch.concat([real_features, fake_featuers], dim=0)
+            # Extract V
+            with torch.no_grad():
+                real_features, fake_features = calc_features_d(batch_data, disc_label)
+
+            features = torch.concat([real_features, fake_features], dim=0)
+            features = add_gaussian_noise(features, std=STD, mean=MEAN)
             outputs = MODEL_D(features)
             loss = CRITERION(outputs, disc_label)
 
@@ -163,8 +185,11 @@ for epoch in range(EPOCHS):
         
         OPTIMIZER_G.zero_grad()
 
-        gen_features = MODEL_AUX(batch_data)
+        # gen_features = calc_features_g(batch_data)
+        # gen_features = gen_features.flatten(1,2)
+        gen_features = MODEL_G(batch_data[:,2,:,:])
 
+        gen_features = add_gaussian_noise(gen_features, std=STD, mean=MEAN)
         outputs = MODEL_D(gen_features)
         loss = CRITERION(outputs, gen_label)
 
@@ -213,40 +238,39 @@ for epoch in range(EPOCHS):
             batch_labels = batch_labels.to(device)
             batch_label = batch_labels[:,2]
 
+            
+            ###############
+            # Discriminator
+            ###############
 
             real_label = torch.ones_like(batch_label)
             fake_label = torch.zeros_like(batch_label)
             disc_label = torch.concat([real_label,fake_label], dim=0)
 
         # Extract V
-            x_fe = batch_data.reshape(batch_data.shape[0]*batch_data.shape[1], batch_data.shape[2], batch_data.shape[3])
-            x_fe = MODEL_G(x_fe)
-            x = x_fe.reshape(batch_data.shape[0], batch_data.shape[1], -1)
-            fake_featuers = x[:,2,:]
-            if MODEL_AUX.include_y:
-                y_one_hot = MODEL_AUX.label_coder(disc_label)
-                x = torch.concat([y_one_hot,x], dim=2)
-            batch_data = x.flatten(1,2)
-            if epoch%P_D == 0:
-                real_features = MODEL_AUX(batch_data)
+            real_features, fake_features = calc_features_d(batch_data, disc_label)
 
-                features = torch.concat([real_features, fake_featuers], dim=0)
-                outputs = MODEL_D(features)
-                loss = CRITERION(outputs, disc_label)/5
+            features = torch.concat([real_features, fake_features], dim=0)
+            features = add_gaussian_noise(features, std=STD, mean=MEAN)
+            outputs = MODEL_D(features)
+            loss = CRITERION(outputs, disc_label)
 
 
-                test_loss_d += loss.item()
-                _, predicted = torch.max(outputs, 1)
-                total_test_d += disc_label.size(0)
-                correct_test_d += (predicted == disc_label).sum().item()
+            test_loss_d += loss.item()
+            _, predicted = torch.max(outputs, 1)
+            total_test_d += disc_label.size(0)
+            correct_test_d += (predicted == disc_label).sum().item()
     
             ##########
             # Generator
             ##########
             gen_label = torch.ones_like(batch_label)
 
-            gen_features = MODEL_AUX(batch_data)
+            # gen_features = calc_features_g(batch_data)
+            # gen_features = gen_features.flatten(1,2)
+            gen_features = MODEL_G(batch_data[:,2,:,:])
 
+            gen_features = add_gaussian_noise(gen_features, std=STD, mean=MEAN)
             outputs = MODEL_D(gen_features)
             loss = CRITERION(outputs, gen_label)
 
@@ -265,22 +289,22 @@ for epoch in range(EPOCHS):
         # _, predicted = torch.max(outputs,1)
         # total_test += batch_labels.size(0)
         # correct_test += (predicted == batch_label).sum().item()
-    if epoch%P_D == 0:
-        test_loss_log_d = test_loss_d / len(TEST_DATALOADER) /2
-        test_acc_log_d = 100 * correct_test_d / total_test_d
-        test_losses_d.append(test_loss_log_d)
-        test_accs_d.append(test_acc_log_d)
+    # if epoch%P_D == 0:
+    test_loss_log_d = test_loss_d / len(TEST_DATALOADER) /2
+    test_acc_log_d = 100 * correct_test_d / total_test_d
+    test_losses_d.append(test_loss_log_d)
+    test_accs_d.append(test_acc_log_d)
 
     test_loss_log_g = test_loss_g / len(TEST_DATALOADER)
     test_acc_log_g = 100 * correct_test_g / total_test_g
     test_losses_g.append(test_loss_log_g)
     test_accs_g.append(test_acc_log_g)
 
-    if epoch%P_D == 0:
-        print(f'val_loss_D: {test_losses_d[-1]:.4f}, val_acc: {test_accs_d[-1]:.1f}\
-val_loss_g: {test_losses_g[-1]:.4f}, val_accs_g:{test_accs_g[-1]:.1f}', end='\n')
-    else:
-        print(f'val_loss_g: {test_losses_g[-1]:.4f}, val_accs_g:{test_accs_g[-1]:.1f}', end='\n')
+    # if epoch%P_D == 0:
+    print(f'val_loss_D: {test_losses_d[-1]:.4f}, val_acc: {test_accs_d[-1]:.1f}\
+, val_loss_g: {test_losses_g[-1]:.4f}, val_accs_g:{test_accs_g[-1]:.1f}', end='\n')
+    # else:
+    #     print(f'val_loss_g: {test_losses_g[-1]:.4f}, val_accs_g:{test_accs_g[-1]:.1f}', end='\n')
 
     # MODEL.metrics_now = {
     #             'train_loss': -train_loss_log,
@@ -289,10 +313,15 @@ val_loss_g: {test_losses_g[-1]:.4f}, val_accs_g:{test_accs_g[-1]:.1f}', end='\n'
     #             'val_loss': -test_loss_log,
     #         }
 
-    # if SHOW_GRAD:
-    #     for name, param in MODEL.named_parameters():
-    #         if param.grad is not None:
-    #             print(f"{name}: {param.grad.mean().item():.10f}")
+    if SHOW_GRAD:
+        print('Grad for D')
+        for name, param in MODEL_D.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: {param.grad.mean().item():.10f}")
+        print('Grad for G')
+        for name, param in MODEL_G.named_parameters():
+            if param.grad is not None:
+                print(f"{name}: {param.grad.mean().item():.10f}")
 
     # if EARLY_STOPPING == 'test_acc':
     #         do_break = MODEL.early_stopping(test_accs[-1],epoch)

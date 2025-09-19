@@ -38,7 +38,7 @@ def test_models():
 
 def get_data():
     global label_map
-    data_dir = r'F:\thesis\Articles\2nd\code\Data'
+    data_dir = r'F:\thesis\Articles\2nd\cod\Data'
     file_name = 'input.pkl'
     file_name_label = 'output.pkl'
     file_path = os.path.join(data_dir, file_name)
@@ -142,6 +142,57 @@ def make_features(li=False):
     with open('Data/1024y/label_test.pkl', 'wb') as file:
         pickle.dump(y_t, file)
 
+
+
+def kl_divergence_builtin(tensor1, tensor2, epsilon=1e-8):
+    """
+    Calculate KL divergence using PyTorch's built-in KL divergence function.
+    """
+    assert tensor1.shape == tensor2.shape, "Tensors must have the same shape"
+    
+    # Add epsilon and normalize
+    tensor1_safe = tensor1 + epsilon
+    tensor2_safe = tensor2 + epsilon
+    
+    p = tensor1_safe / tensor1_safe.sum(dim=1, keepdim=True)
+    q = tensor2_safe / tensor2_safe.sum(dim=1, keepdim=True)
+    
+    # Use PyTorch's KL divergence (returns per-sample KL, then take mean)
+    kl_div = F.kl_div(torch.log(q), p, reduction='none').sum(dim=1)
+    return kl_div.mean()
+
+X, y, X_t, y_t, lm = get_data()
+X = X.permute(0,1,3,2)
+X_t = X_t.permute(0,1,3,2)
+
+
+weight_dir = r'F:\thesis\Articles\2nd\mlruns\994478961421787748\5945e3b605184dd4866fcccf6edc6ace\artifacts'
+weight_dir = os.path.join(weight_dir,'test_weight.pth')
+network = utils.load_model(Network(26), weight_dir)
+
+weight_dir = r'F:\thesis\Articles\2nd\cod\others\aux_weight_1.pth'
+# weight_dir = os.path.join(weight_dir,'test_weight.pth')
+auxiliary = utils.load_model(
+    AuxNet(n_layer=1, in_dim=1024*5, out_dim=1024), 
+    weight_dir)
+
+feature_extractor = network.feature_extractor
+classifier = network.classifier
+# auxiliary = models.AuxNet(n_layer=1, in_dim=1024*5, out_dim=1024)
+discriminator = Classifier(num_classes=2)
+generator = FeatureExtractor(input_channels=2)
+
+def calc_features_g(batch_data):
+    x_fe = batch_data.flatten(0,1)
+    x_fe = generator(x_fe)
+    x = x_fe.reshape(batch_data.shape[0], batch_data.shape[1], -1)
+    return x
+
+batch_data = X
+x = calc_features_g(batch_data)
+fake_features = x[:,2,:]
+batch_data = x.flatten(1,2)
+real_features = auxiliary(batch_data)
 
 
 
